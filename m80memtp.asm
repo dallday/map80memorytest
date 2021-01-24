@@ -13,9 +13,9 @@
 ;  Since we are talking about a NASSYS program the memory from 0000H to 07FFH 
 ;     will always be used by the monitor, working ram and video ram.
 ;     So testing between 0000H and 07FFH will not be very useful 
-;     ( unless page count set to 0 and you advoid the ram used by NASSYS and this program )
+;     ( unless page count set to 0 and you avoid the ram used by NASSYS and this program )
 ;
-;  The progam will always be in memory 0D00 no matter what paging it does.
+;  The progam will always be in memory 0C80H no matter what paging it does.
 ;
 ;  if start address is between 1000H and 7FFFH and the end address is 8000H or below then
 ;        it will test each 32k page using the lower 32k of memory.
