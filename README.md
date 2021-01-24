@@ -10,6 +10,8 @@ See map80memtp.asm for full details on using the program.
 
 See readme.txt for details on assembling the program.
 
+You will need to set the execute flag on the build and compile.sh files if you want to use them.
+
 File name | Description
 ----------|------------
 build | simple bash script to assemble the code
