@@ -1,7 +1,7 @@
 # File m80memtp.asm
 0000			; M80MEMTP 
-0000			;   David Allday - 22 January 2021 
-0000			;        version 2 
+0000			;   David Allday - 24 January 2021 
+0000			;        version 3 
 0000			; 
 0000			; Memory test program for the Nascom MAP80 256k memory card 
 0000			;  It is designed to test the paging options provided by the MAP80 256k card. 
@@ -14,9 +14,9 @@
 0000			;  Since we are talking about a NASSYS program the memory from 0000H to 07FFH  
 0000			;     will always be used by the monitor, working ram and video ram. 
 0000			;     So testing between 0000H and 07FFH will not be very useful  
-0000			;     ( unless page count set to 0 and you advoid the ram used by NASSYS and this program ) 
+0000			;     ( unless page count set to 0 and you avoid the ram used by NASSYS and this program ) 
 0000			; 
-0000			;  The progam will always be in memory 0D00 no matter what paging it does. 
+0000			;  The progam will always be in memory 0C80H no matter what paging it does. 
 0000			; 
 0000			;  if start address is between 1000H and 7FFFH and the end address is 8000H or below then 
 0000			;        it will test each 32k page using the lower 32k of memory. 
@@ -58,7 +58,7 @@
 0000			;   Numberof64kpages	The number of 64k memory pages to be tested. 
 0000			;			0 - special case and NO paging is activated. 
 0000			;			4 - standard M80 256k card fully populated 
-0000			;			10 - (16 dec) if you have 2 cards or moded the card to provide 1Mbyte. 
+0000			;			10 - (16 dec) if you have 4 cards or moded the card to provide 1Mbyte. 
 0000			;  e.g. 
 0000			;      EC80 8000 9000 2 
 0000			;        will test memory from 8000 to 8FFF for 4 32k pages  
@@ -75,6 +75,51 @@
 0000			;         Only the low byte is used from lastpage parameter. 
 0000			;         The end address tested is actually -1 of the endaddress value. 
 0000			; 
+0000			; *************** OUTPUT MESSAGES  
+0000			; 
+0000			;   The program will output a message on the top line. 
+0000			; 
+0000			;   e.g. in the default call to C80 
+0000			;      MAP80 MEMTST V3 S:8000 E:FFFF 32KU pg:00L 8888 
+0000			;      where 
+0000			;        V3     is the version of the program 
+0000			;        S:8000 is the first address to be tested 
+0000			;        E:FFFF is the last address to be tested 
+0000			;        32KU   means it is using 32k paging mode using the upper 32k of memory 
+0000			;               This can be  
+0000			;                   32KL meaning it is using 32k paging mode using the lower 32k of memory 
+0000			;                   64K  meaning it is using 64k paging mode 
+0000			;        pg:00L shows the 32k page being tested either Lower or Upper 
+0000			;        8888   is the current byte being tested 
+0000			; 
+0000			;   A similar message is displayed on the main screen 
+0000			; 
+0000			;   S:8000 E:FFFF 08 32KU pages 
+0000			;      where 
+0000			;        S:8000 is the first address to be tested 
+0000			;        E:FFFF is the last address to be tested 
+0000			;        08     is the number of pages to be tested 
+0000			;        32KU   means it is using 32k paging mode using the upper 32k of memory 
+0000			;                This can be   
+0000			;                   32KL meaning it is using 32k paging mode using the lower 32k of memory 
+0000			;                   64K  meaning it is using 64k paging mode 
+0000			; 
+0000			;  It then outputs a messafe for each bank as it is zeroised.   
+0000			;        Zero:8000 - FFFF pg:00L 
+0000			;        Zero:8000 - FFFF pg:00U 
+0000			;        Zero:8000 - FFFF pg:01L  
+0000			;        etc . . . .  
+0000			; 
+0000			;  It then outputs a message for each bank as it is tested 
+0000			;        TEST:8000 - FFFF pg:00L 
+0000			;        TEST:8000 - FFFF pg:00U 
+0000			;        TEST:8000 - FFFF pg:01L  
+0000			;        etc . . . .  
+0000			;    and the current address will be displayed in the right hand side of the top line. 
+0000			;      
+0000			;  The outputs messages will be slightly different for 64k mode and the non-paging mode 
+0000			;  
+0000			;  Any errors encounted will be reported - see RESULTS section below. 
 0000			; 
 0000			; ***************   STOPPING THE PROGRAM  
 0000			; 
@@ -116,7 +161,7 @@
 0000			;    space or c starts the process all over again 
 0000			;    enter Q or any other character to return to NAS-SYS ( see "press SP, C or Q" above ) 
 0000			; 
-0000			; Results: 
+0000			; *******************  Results: 
 0000			;  memory address with a letter A means 
 0000			;     The memory location was not 0 when checked. 
 0000			;         All memory locations are set to zero before the tests begin 
@@ -139,6 +184,11 @@
 0000			;    The rout routine caould at that point update the kmap table with the space. 
 0000			;  2.Changed to check key routine to check for any input ( keyboard or uart ) 
 0000			; 
+0000			;  Version 3 - January 2021 
+0000			;  1. changed start message to state switching x type pages 
+0000			;            e.g. switching 8 32KU pages  ( 32k pages into upper 32k of memory ) 
+0000			;  2. moved stack to end of code 
+0000			;  3. optimised some of the code to save space 
 0000			; 
 0000			; Nas-Sys Equates 
 0000			 
@@ -186,7 +236,7 @@
 0000			; 
 0000			; 
 0000				ORG	0c80H	; had to use 0C80H as program needs all the working Ram :) 
-0c80 c3 c5 0c			JP	START 
+0c80 c3 95 0c			JP	START 
 0c83			 
 0c83 00 00		STOREADDR:	DEFW	0H	; store address we got to as screen updated 
 0c85			 
@@ -215,712 +265,688 @@
 0c91 00 80		STARTADDR:	DEFW	08000H	; start address for test of a page 
 0c93 00 00		ENDADDR:	DEFW	00000H	; end address for test of a page 
 0c95			 
-0c95			;  our own stack to use - also used for opcode call 
-0c95			; used values so I could check and see how much we used  
-0c95			; after run seemed to only get down to 2B leaving 2C (4 bytes ) free 
-0c95			;  so commented out the other spaces 
-0c95			STACKSPACE: 
-0c95			;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H 
-0c95			;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H 
-0c95 2f 2e 2d 2c 2b 2a 29 28			DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H 
-0c9d 27 26 25 24 23 22 21 20			DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H 
-0ca5 1f 1e 1d 1c 1b 1a 19 18			DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H 
-0cad 17 16 15 14 13 12 11 10			DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H 
-0cb5 0f 0e 0d 0c 0b 0a 09 08			DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H 
-0cbd 07 06 05 04 03 02 01 00			DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H 
-0cc5			 
-0cc5			TSTSTACK:	EQU $		; the program stack starts at this for OPCODE call 
-0cc5			 
-0cc5			START:	 
-0cc5 31 c5 0c			LD SP,TSTSTACK		; use our own stack 
-0cc8			 
-0cc8 2a 29 0c			LD   HL,(CURSOR)	; save current cursor position 
-0ccb e5				PUSH HL 
-0ccc			 
-0ccc 21 ca 0b			LD   HL,0BCAH	; set screen to heading line 
-0ccf 22 29 0c			LD (CURSOR),HL	 
-0cd2 ef				RST PRS		; clear current line 
-0cd3 1b 00			DEFB ESC,0 
-0cd5			 
-0cd5 ef				RST PRS 
-0cd6 ..				DEFM "MAP80 MEMTST V2" 
-0ce5 00				DEFB 0 
-0ce6			 
-0ce6 e1				POP HL		; restore cursor position 
-0ce7 22 29 0c			LD (CURSOR),HL	 
-0cea			 
-0cea af				XOR A 
-0ceb 32 8f 0c			LD (WAITONERROR),A	; so we wait after 10 error lines 
-0cee				; ---- check if paramters supplied 
-0cee 3a 0b 0c			LD  A,(ARGN)	; load how many arguments  
-0cf1 b7				OR  A 
-0cf2 28 1e			JR  Z,NOPARMS	; no paramters given just E entered 
-0cf4 fe 01			CP  1 
-0cf6 28 1a			JR  Z,NOPARMS	; just the Execute address given 
-0cf8 fe 02			CP  2 
-0cfa 28 10			JR  Z,TWO 
-0cfc fe 03			CP  3 
-0cfe 28 06			JR  Z,THREE 
-0d00				; assume we have 4 or more parameters - will ignore the rest 
-0d00				; drop down to 4 parameters 
-0d00				; Load parameters into local memory  
-0d00				; so if called again same values will be used 
-0d00				 
-0d00 3a 12 0c		FOUR:	LD A,(ARG4)		; just the low bytes from this parameter 
-0d03				; allow 0 as a special case - means no paging  
-0d03				;OR A			; check it is not 0  
-0d03				;JR NZ,FOUROK 
-0d03				;INC A			; if zero make it 1 
-0d03			FOUROK: 
-0d03 32 85 0c			LD (NO64KPAGES),A	; store number of 64k pages to process 
-0d06			 
-0d06 2a 10 0c		THREE:	LD HL,(ARG3)	; new end address 
-0d09 22 93 0c			LD (ENDADDR),HL 
-0d0c			 
-0d0c 2a 0e 0c		TWO:	LD HL,(ARG2)	; new start address 
-0d0f 22 91 0c			LD (STARTADDR),HL 
-0d12			 
-0d12			NOPARMS:	; paramters all loaded 
-0d12					; check the type of test being done. 
-0d12 3e 01			LD A,1	; set page increment value to 1 used for 32k pages 
-0d14 4f				LD C,A 
-0d15				; set up addresses 
-0d15 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
-0d18 ed 5b 91 0c		LD DE,(STARTADDR)     ; start address 
-0d1c 2b				DEC HL		; get the real finish address in HL 
+0c95			 
+0c95			START:	 
+0c95 31 75 0f			LD SP,TSTSTACK		; use our own stack 
+0c98			 
+0c98 2a 29 0c			LD   HL,(CURSOR)	; save current cursor position 
+0c9b e5				PUSH HL 
+0c9c			 
+0c9c 21 ca 0b			LD   HL,0BCAH	; set screen to heading line 
+0c9f 22 29 0c			LD (CURSOR),HL	 
+0ca2 ef				RST PRS		; clear current line 
+0ca3 1b 00			DEFB ESC,0 
+0ca5			 
+0ca5 ef				RST PRS 
+0ca6 ..				DEFM "MAP80 MEMTST V3" 
+0cb5 00				DEFB 0 
+0cb6			 
+0cb6 e1				POP HL		; restore cursor position 
+0cb7 22 29 0c			LD (CURSOR),HL	 
+0cba			 
+0cba af				XOR A 
+0cbb 32 8f 0c			LD (WAITONERROR),A	; so we wait after 10 error lines 
+0cbe				; ---- check if paramters supplied 
+0cbe 3a 0b 0c			LD  A,(ARGN)	; load how many arguments  
+0cc1 b7				OR  A 
+0cc2 28 1e			JR  Z,NOPARMS	; no paramters given just E entered 
+0cc4 fe 01			CP  1 
+0cc6 28 1a			JR  Z,NOPARMS	; just the Execute address given 
+0cc8 fe 02			CP  2 
+0cca 28 10			JR  Z,TWO 
+0ccc fe 03			CP  3 
+0cce 28 06			JR  Z,THREE 
+0cd0				; assume we have 4 or more parameters - will ignore the rest 
+0cd0				; drop down to 4 parameters 
+0cd0				; Load parameters into local memory  
+0cd0				; so if called again same values will be used 
+0cd0				 
+0cd0 3a 12 0c		FOUR:	LD A,(ARG4)		; just the low bytes from this parameter 
+0cd3				; allow 0 as a special case - means no paging  
+0cd3			FOUROK: 
+0cd3 32 85 0c			LD (NO64KPAGES),A	; store number of 64k pages to process 
+0cd6			 
+0cd6 2a 10 0c		THREE:	LD HL,(ARG3)	; new end address 
+0cd9 22 93 0c			LD (ENDADDR),HL 
+0cdc			 
+0cdc 2a 0e 0c		TWO:	LD HL,(ARG2)	; new start address 
+0cdf 22 91 0c			LD (STARTADDR),HL 
+0ce2			 
+0ce2			NOPARMS:	; paramters all loaded 
+0ce2					; check the type of test being done. 
+0ce2 3e 01			LD A,1	; set page increment value to 1 used for 32k pages 
+0ce4 4f				LD C,A 
+0ce5				; set up addresses 
+0ce5 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
+0ce8 ed 5b 91 0c		LD DE,(STARTADDR)     ; start address 
+0cec 2b				DEC HL		; get the real finish address in HL 
+0ced			 
+0ced			 
+0ced			TESTTYPE:		; check if doing lower upper 32k or 64k 
+0ced			 
+0ced 7a				LD A,D 		; get the high byte of the START address 
+0cee c6 80			ADD 80H		; adding 80H will set carry flag if greater than 80H 
+0cf0 38 0a			JR C,TOP32K	; if carry set then start address is in top 32k 
+0cf2						; else start address is in bottom 32k   
+0cf2 7c				LD A,H	 	; get the high byte of the end address 
+0cf3 c6 80			ADD 80H		; adding 7FH will set carry flag if greater than 80H 
+0cf5 38 0a			JR C,FULL64K	; if carry set then end address is in top 32k so doing 64k paging 
+0cf7			 
+0cf7			LOW32K: 
+0cf7 3e c0			LD A,0C0H	; value to output to use the lower 32k for paging  
+0cf9 47				LD B,A 
+0cfa 18 09			JR SETPAGETYPE 
+0cfc 3e 80		TOP32K: LD A,080H	; value to output to use the upper 32k for paging 
+0cfe 47				LD B,A 
+0cff 18 04			JR SETPAGETYPE 
+0d01			 
+0d01			FULL64K:  
+0d01 3e 00			LD A,00H	; value to output to test the first 64k page 
+0d03 47				LD B,A 
+0d04 03				INC BC		; increment value so page increment is now 2 
+0d05			 
+0d05			SETPAGETYPE: 
+0d05 ed 43 86 0c		LD (PAGEINCR),BC	; save increment value and what type of test is being done  
+0d09			 
+0d09			 
+0d09				 
+0d09			; ------------------------- display details about the test. 
+0d09			DISPLAYSTART: 
+0d09			 
+0d09 ed 5b 29 0c		LD  DE,(CURSOR)	; hold current cursor position 
+0d0d 21 da 0b			LD	HL,0BDAH	; set screen to heading line 
+0d10 22 29 0c			LD (CURSOR),HL 
+0d13 cd 11 0f			CALL OUTRANGE   ; test range  
+0d16 cd 25 0f			CALL DISPSIZE   ; test type 32k or 64k and paging ? 
+0d19 ed 53 29 0c		LD (CURSOR),DE ; put cursor back onto main screen 
 0d1d			 
-0d1d			 
-0d1d			TESTTYPE:		; check if doing lower upper 32k or 64k 
-0d1d			 
-0d1d 7a				LD A,D 		; get the high byte of the START address 
-0d1e c6 80			ADD 80H		; adding 80H will set carry flag if greater than 80H 
-0d20 38 0a			JR C,TOP32K	; if carry set then start address is in top 32k 
-0d22						; else start address is in bottom 32k   
-0d22 7c				LD A,H	 	; get the high byte of the end address 
-0d23 c6 80			ADD 80H		; adding 7FH will set carry flag if greater than 80H 
-0d25 38 0a			JR C,FULL64K	; if carry set then end address is in top 32k so doing 64k paging 
-0d27			 
-0d27			LOW32K: 
-0d27 3e c0			LD A,0C0H	; value to output to use the lower 32k for paging  
-0d29 47				LD B,A 
-0d2a 18 09			JR SETPAGETYPE 
-0d2c 3e 80		TOP32K: LD A,080H	; value to output to use the upper 32k for paging 
-0d2e 47				LD B,A 
-0d2f 18 04			JR SETPAGETYPE 
-0d31			 
-0d31			; ---------------------- parameters are incorrect 
-0d31			;PARAMERR: 
-0d31			;	RST 	PRS 
-0d31			;	DEFB	CR 
-0d31			;	DEFM 	"ERROR" 
-0d31			;	DEFB 	CR,0 
-0d31			;	RST SCAL 	 ; return to NasSys3 
-0d31			;	DEFB MRET 
-0d31			 
-0d31			 
-0d31			FULL64K:  
-0d31 3e 00			LD A,00H	; value to output to test the first 64k page 
-0d33 47				LD B,A 
-0d34 03				INC BC		; increment value so page increment is now 2 
-0d35			 
-0d35			SETPAGETYPE: 
-0d35 ed 43 86 0c		LD (PAGEINCR),BC	; save increment value and what type of test is being done  
-0d39			 
-0d39			 
-0d39				 
-0d39			; ------------------------- display details about the test. 
-0d39			DISPLAYSTART: 
-0d39			 
-0d39 2a 29 0c			LD    HL,(CURSOR)	; hold current cursor position 
-0d3c e5				PUSH  HL 
-0d3d 21 da 0b			LD	HL,0BDAH	; set screen to heading line 
-0d40 22 29 0c			LD (CURSOR),HL 
-0d43 cd 59 0f			CALL OUTDETAILS 
-0d46							; move onto screen and repeat details 
-0d46				;RST SCAL 
-0d46				;DEFB CRLF	 ; do a new line 
+0d1d			    ; move onto screen and repeat details 
+0d1d cd 11 0f			CALL OUTRANGE 
+0d20			 
+0d20 cd e1 0d		    CALL GETPAGETYPE 
+0d23			    ; Sets C to the page type (PAGETYPE)  
+0d23			    ; Sets B to the number of pages to do ( NO64KPAGES )  
+0d23			    ;  will be *2 if doing 32k pages (PAGETYPE != 0 ) 
+0d23			    ; A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging ) 
+0d23			     
+0d23 b7			    OR A 
+0d24 28 1e			JR Z,NOPAGING	; zero means no paging  
+0d26			 
+0d26 ef				RST PRS 
+0d27 ..				DEFM "switching " 
+0d31 00				DEFB 0 
+0d32			 
+0d32 78				LD  A,B		; Number set earlier by GETPAGETYPE  
+0d33 df				RST SCAL        ; print  count number 
+0d34 68				DEFB B2HEX 
+0d35 df				RST SCAL        ; print space 
+0d36 69				DEFB SPACE 
+0d37				 
+0d37 cd 25 0f			CALL DISPSIZE   ; output type of test being done 
+0d3a			 
+0d3a ef				RST PRS 
+0d3b ..				DEFM " pages" 
+0d41 00				DEFB 0 
+0d42 18 00			JR  WAITSTART 
+0d44			 
+0d44			NOPAGING: 
+0d44			    ; nothing to do if not paging 
+0d44			     
+0d44			WAITSTART:	 
+0d44			 
+0d44			; new line before we start the test 
+0d44 df			    RST SCAL 
+0d45 6a			    DEFB CRLF 
 0d46			 
-0d46 e1				POP HL			; put cursor back onto main screen 
-0d47 22 29 0c			LD (CURSOR),HL 
-0d4a			 
-0d4a cd 59 0f			CALL OUTDETAILS 
-0d4d 78				LD  A,B		; Number set earlier if 32k or 64k 
-0d4e b7				OR A		; check number of pages 
-0d4f 28 17			JR Z,NOPAGING	; zero means no paging  
-0d51 ef				RST PRS 
-0d52 ..				DEFM " using " 
-0d59 00				DEFB 0 
-0d5a 78				LD  A,B		; Number set earlier if 32k or 64k 
-0d5b df				RST SCAL        ; print  count number 
-0d5c 68				DEFB B2HEX 
-0d5d ef				RST PRS 
-0d5e ..				DEFM " blocks" 
-0d65 00				DEFB 0 
-0d66 18 00			JR  WAITSTART 
-0d68			NOPAGING: 
-0d68			WAITSTART:	 
-0d68			 
-0d68			; new line before we start the test 
-0d68 df			    RST SCAL 
-0d69 6a			    DEFB CRLF 
-0d6a			 
-0d6a			; -------------- wait for key press before starting 
-0d6a			; removed so it goes straight in 
-0d6a			;	RST PRS 
-0d6a			;	DEFB CR 
-0d6a			;	DEFM "To start " 
-0d6a			;	DEFB 0 
-0d6a			;	CALL WAIT 
-0d6a			; 
-0d6a			; -------------------------- start running the tests 
-0d6a			 
-0d6a			LOOP:	; start by setting test type 
-0d6a				 
-0d6a 3e 01			LD	A,1		; 2 cycles ( zerioise and then test ) 
-0d6c				;   firstly to zeroize all pages 
-0d6c				;   second to do bit walk 
-0d6c				;             and opcode test 
-0d6c 32 89 0c			LD	(TESTCYCLE),A 
-0d6f			 
-0d6f			NXTCYCLE:	; move to next cycle 
-0d6f			 
-0d6f			PAGESTART:	; start here for new pages 
-0d6f			 
-0d6f 47				LD  B,A 
-0d70 3a 87 0c		    LD  A,(PAGETYPE)	; load the value to set the first page 
-0d73 4f				LD  C,A       	; value that starts with page 0 
-0d74 b7				OR  A		; if zero then doing 64k pages 
-0d75 3a 85 0c			LD  A, (NO64KPAGES)	; get number of pages to check 
-0d78 28 01			JR  Z,PSTART64K		; flag set by previous OR A  
-0d7a						; doing 32k pages so need to double the number of tests done 
-0d7a 17				RLA			; shift left == multiply by 2 ( carry bit reset by OR A ) 
-0d7b							; needed so we can do 2 32k tests on each 64k page	 
-0d7b			PSTART64K: 
-0d7b				 
-0d7b 47				LD  B,A			; store away for later count down 
-0d7c			 
-0d7c			NXTPAGE: 
-0d7c 78				LD A,B		; retrieve counter to check if paging  
-0d7d b7				OR A		; should only be zero first time if not paging 
-0d7e 28 0a			JR Z,SKIPPAGING	; if the count was zero then no paging  
-0d80 79				LD A,C 
-0d81 d3 fe			OUT (0FEH),A	; set memory 
-0d83 3a 86 0c			LD A,(PAGEINCR) ; will only add 1 or 2 to the C register ready for next page          
-0d86 81				ADD A,C 
-0d87 4f				LD C,A		; save it again 
-0d88 18 01			JR SETADDRESS 
-0d8a			SKIPPAGING: 
-0d8a 04				INC B		; increment B from 0 to 1 to do 1 cycle 
-0d8b			SETADDRESS: 
-0d8b c5				PUSH BC		; save counter and next port value         
-0d8c				; set up addresses 
-0d8c 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
-0d8f ed 5b 91 0c		LD DE,(STARTADDR)     ; start address 
-0d93			 
-0d93				; decide which test is being done 
-0d93 3a 89 0c			LD	A,(TESTCYCLE)	; check what test we are doing 
-0d96 fe 02			CP	2 
-0d98 ca b5 0d			JP	Z,BITWALK 
-0d9b				; else number 1 is zero all memory 
-0d9b			 
-0d9b			ZERO: 
-0d9b			;   set all memory addresses to value 0 
-0d9b			 
-0d9b cd 6d 0e		 	CALL OUTZERO	 ; output start message  
+0d46			; -------------- wait for key press before starting 
+0d46			; removed so it goes straight in 
+0d46			;	RST PRS 
+0d46			;	DEFB CR 
+0d46			;	DEFM "To start " 
+0d46			;	DEFB 0 
+0d46			;	CALL WAIT 
+0d46			; 
+0d46			; -------------------------- start running the tests 
+0d46			 
+0d46			LOOP:	; start by setting test type 
+0d46				 
+0d46 3e 01			LD	A,1		; 2 cycles ( zerioise and then test ) 
+0d48				;   firstly to zeroize all pages 
+0d48				;   second to do bit walk 
+0d48				;             and opcode test 
+0d48 32 89 0c			LD	(TESTCYCLE),A 
+0d4b			 
+0d4b			NXTCYCLE:	; move to next cycle 
+0d4b			 
+0d4b			PAGESTART:	; start here for new pages 
+0d4b			 
+0d4b cd e1 0d		    CALL GETPAGETYPE     
+0d4e			    ; Sets C to the page type (PAGETYPE)  
+0d4e			    ; Sets B to the number of pages to do ( NO64KPAGES )  
+0d4e			    ;  will be *2 if doing 32k pages (PAGETYPE != 0 ) 
+0d4e			    ; 
+0d4e			 
+0d4e			NXTPAGE: 
+0d4e 78				LD A,B		; retrieve counter to check if paging  
+0d4f b7				OR A		; should only be zero first time if not paging 
+0d50 28 0a			JR Z,SKIPPAGING	; if the count was zero then no paging  
+0d52 79				LD A,C          ; get page type - the value to set the page mode 
+0d53 d3 fe			OUT (0FEH),A	; set memory 
+0d55 3a 86 0c			LD A,(PAGEINCR) ; will only add 1 or 2 to the C register ready for next page          
+0d58 81				ADD A,C 
+0d59 4f				LD C,A		; save it again 
+0d5a 18 01			JR SETADDRESS 
+0d5c			SKIPPAGING: 
+0d5c 04				INC B		; increment B from 0 to 1 to do 1 cycle 
+0d5d			SETADDRESS: 
+0d5d c5				PUSH BC		; save counter and next port value         
+0d5e				; set up addresses 
+0d5e 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
+0d61 ed 5b 91 0c		LD DE,(STARTADDR)     ; start address 
+0d65			 
+0d65				; decide which test is being done 
+0d65 3a 89 0c			LD	A,(TESTCYCLE)	; check what test we are doing 
+0d68 fe 02			CP	2 
+0d6a ca 87 0d			JP	Z,BITWALK 
+0d6d				; else number 1 is zero all memory 
+0d6d			 
+0d6d			ZERO: 
+0d6d			;   set all memory addresses to value 0 
+0d6d			 
+0d6d cd 42 0e		 	CALL OUTZERO	 ; output start message  
+0d70			 
+0d70 af				XOR A		 ; clear carry flag 
+0d71 ed 52			SBC HL,DE        ; calculate count 
+0d73			 
+0d73 44				LD B,H           ; and in BC for the LDIR code 
+0d74 4d				LD C,L 
+0d75 2a 91 0c			LD HL,(STARTADDR); start address 
+0d78 54				LD D,H           ; and in DE 
+0d79 5d				LD E,L 
+0d7a			 
+0d7a				; LDIR has an issue if any ROM in the way 
+0d7a				;  so doing own loop 
+0d7a				;  We need to implicity set each address to zero 
+0d7a			        ; the LDI instruction moves (DE) to (HL) but they are the same address. 
+0d7a			ZBYTE: 
+0d7a				; removed these as sloowwww down the zeroise process 
+0d7a				; CALL OUTADDHEADER	 ; put address on screen 
+0d7a				; CALL CHECKKEY	; check for key press 
+0d7a 36 00			LD (HL),0       ; copy 0 to location  
+0d7c ed a0			LDI             ; next location and dec BC 
+0d7e			 
+0d7e ea 7a 0d			JP PE,ZBYTE       ; loop till end reached 
+0d81			 
+0d81 cd d4 0e			CALL CHECKKEY	; check for key press after each zeroisation 
+0d84			 
+0d84 c3 cb 0d			JP	ENDPAGE 
+0d87			 
+0d87			 
+0d87			BITWALK:	; test page to see if is starts at zero 
+0d87			                ; then do bit walk 
+0d87			 
+0d87 cd 39 0e		 	CALL OUTTEST	    ; output start message  
+0d8a af				XOR A		 ; ensure flags are reset 
+0d8b ed 52			SBC HL,DE        ; calculate count 
+0d8d 44				LD B,H           ; and in BC for the LDIR code 
+0d8e 4d				LD C,L 
+0d8f 2a 91 0c			LD HL,(STARTADDR); reload start address 
+0d92			 
+0d92			;--------- loop through all addresses 
+0d92			ZCHECK: 
+0d92 16 00			LD D,0		 ; clear error flag 
+0d94 cd 9b 0e			CALL OUTADDHEADER	 ; put address on screen 
+0d97 af				XOR A            ;  
+0d98 be				CP (HL)          ; memory should be zero from original zeroising 
+0d99 3e 41			LD A,"A"         ; load error letter in case it failed 
+0d9b c4 b7 0e			CALL NZ,ERR      ; Fault A if non zero from cp statement 
 0d9e			 
-0d9e af				XOR A		 ; clear carry flag 
-0d9f ed 52			SBC HL,DE        ; calculate count 
-0da1			 
-0da1 44				LD B,H           ; and in BC for the LDIR code 
-0da2 4d				LD C,L 
-0da3 2a 91 0c			LD HL,(STARTADDR); start address 
-0da6 54				LD D,H           ; and in DE 
-0da7 5d				LD E,L 
-0da8			 
-0da8				; LDIR has an issue if any ROM in the way 
-0da8				;  so doing own loop 
-0da8				;  We need to implicity set each address to zero 
-0da8			        ; the LDI instruction moved (DE) to (HL) but they are the same address. 
-0da8			ZBYTE: 
-0da8				; removed these as sloowwww down the zeroise process 
-0da8				; CALL OUTADDHEADER	 ; put address on screen 
-0da8				; CALL CHECKKEY	; check for key press 
-0da8 36 00			LD (HL),0       ; copy 0 to location  
-0daa ed a0			LDI             ; next location and dec BC 
-0dac			 
-0dac ea a8 0d			JP PE,ZBYTE       ; loop till end reached 
-0daf			 
-0daf cd 45 0f			CALL CHECKKEY	; check for key press after each zeroisation 
-0db2			 
-0db2 c3 f9 0d			JP	ENDPAGE 
-0db5			 
-0db5			 
-0db5			BITWALK:	; test page to see if is starts at zero 
-0db5			                ; then do bit walk 
-0db5			 
-0db5 cd 5a 0e		 	CALL OUTTEST	    ; output start message  
-0db8 af				XOR A		 ; ensure flags are reset 
-0db9 ed 52			SBC HL,DE        ; calculate count 
-0dbb 44				LD B,H           ; and in BC for the LDIR code 
-0dbc 4d				LD C,L 
-0dbd 2a 91 0c			LD HL,(STARTADDR); reload start address 
-0dc0			 
-0dc0			;--------- loop through all addresses 
-0dc0			ZCHECK: 
-0dc0 16 00			LD D,0		 ; clear error flag 
-0dc2 cd ce 0e			CALL OUTADDHEADER	 ; put address on screen 
-0dc5 af				XOR A            ;  
-0dc6 be				CP (HL)          ; memory should be zero from original zeroising 
-0dc7 3e 41			LD A,"A"         ; load error letter in case it failed 
-0dc9 c4 ec 0e			CALL NZ,ERR      ; Fault A if non zero from cp statement 
-0dcc			 
-0dcc			; -------------------    walking bit test 
-0dcc 3e 01			LD A,1           ; intial bit position  
-0dce 77			WALK:	LD (HL),A        ; put into memory 
-0dcf be				CP (HL)          ; did it get there 
-0dd0 f5				PUSH AF          ; save bit pattern 
-0dd1 3e 42			LD A,"B"         ; load error code in case 
-0dd3 c4 ec 0e			CALL NZ,ERR      ; report Fault B if walk failed 
-0dd6 f1				POP AF           ; get bit pattern and flags from stack 
-0dd7 20 03			JR NZ,LOADFF     ; if it failed jump to next test 
-0dd9 17				RLA              ; move bit to next position 
-0dda 30 f2			JR NC,WALK       ; repeat until the bit reaches the carry flag 
-0ddc			 
-0ddc			;-------------------- Load FF test   
-0ddc			LOADFF: 
-0ddc 3e ff		 	LD A,0FFH      ; Store FF  
-0dde 77				LD (HL),A        ; store FF into test location 
-0ddf be				CP (HL)          ; did it get there 
-0de0 3e 43			LD A,"C"         ; load error letter in case 
-0de2 c4 ec 0e			CALL NZ,ERR      ; Fault C as FF not loaded 
-0de5			 
-0de5				; test the running of an opcode in the memory area 
-0de5			 
-0de5 7a				LD A,D           ; get error flag set in ERR routine 
-0de6 b7				OR A             ; Non-zero if error occured  
-0de7 cc 0f 0e			CALL Z,OPCODETEST	; if no other errors test if opcode fetch works 
-0dea			 
-0dea 7a				LD A,D           ; get error flag set in ERR routine 
-0deb b7				OR A             ; Non-zero if error occured  
-0dec c4 f7 0e			CALL NZ,ERRORLINE   ; output a newline - or wait if too many errors 
-0def			 
-0def			;--------------------- end of check a single byte 
-0def cd 45 0f			CALL CHECKKEY	; check for key press 
-0df2						 ; unless we reset DL it does  
-0df2			                         ; (HL) -> (DE) and DE is ROM - 0x00xx or 0x01xx 
-0df2 54				LD	D,H	 ; reset DE for the LDI 
-0df3 5d				LD	E,L 
-0df4 ed a0			LDI              ; step onto next location 
-0df6 ea c0 0d			JP PE,ZCHECK       ; loop till end reached 
-0df9			 
-0df9			;----------- end of walk test  
-0df9			 
-0df9			; drop through to ENDPAGE when done 
-0df9			 
-0df9			ENDPAGE:	; come here when we have finished test for one page 
-0df9			 
-0df9 c1				POP BC		 ; get counter and port value from stack 
-0dfa 10 80			DJNZ NXTPAGE	 ; decement B and jump if not zero 
-0dfc			 
-0dfc				;RST PRS 
-0dfc				;DEFM "End Test" 
-0dfc				;DEFB CR,0 
-0dfc				;CALL WAIT	 ; wait between test type 
-0dfc			 
-0dfc			 
-0dfc			; check if we have done all tests 
-0dfc 3a 89 0c			LD	A,(TESTCYCLE)	; load current test number 
-0dff 3c				INC	A 
-0e00 57				LD	D,A			; store for start check 
-0e01 32 89 0c			LD	(TESTCYCLE),A		; store away again 
-0e04 fe 03			CP	3 
-0e06 c2 6f 0d			JP	NZ,NXTCYCLE 
-0e09			 
-0e09						 ; removed unneeded display			  
-0e09			;	RST PRS          ; say we are looping 
-0e09			;	DEFM "DONE" 
-0e09			;	DEFB CR,0 
-0e09			 
-0e09 cd 09 0f			CALL WAIT	 ; wait after memtest 
-0e0c			 
-0e0c						 ; removed unneeded display			  
-0e0c			;	RST PRS          ; say we are looping 
-0e0c			;	DEFM "LOOPING" 
-0e0c			;	DEFB CR,0 
-0e0c			 
-0e0c c3 6a 0d			JP LOOP          ; go back to start 
-0e0f			 
-0e0f			;--------------------------------------- 
-0e0f			; -------------------- end of main loop 
-0e0f			;--------------------------------------- 
-0e0f			 
-0e0f			 
-0e0f			 
-0e0f			;---------------------- do opcode test 
-0e0f			;                       as a subroutine as main loop was too big for JR commands 
-0e0f			OPCODETEST: 
-0e0f			 
-0e0f			LOADOPCODE: 
-0e0f e5				PUSH HL 
-0e10 21 13 0e			LD HL,DUMMY 
-0e13			DUMMY: 
-0e13 7e				LD A,(HL)	 ; dummy to get code value	 
-0e14 e1				POP HL 
-0e15 77				LD (HL),A	; LD A,(HL) 
+0d9e			; -------------------    walking bit test 
+0d9e 3e 01			LD A,1           ; intial bit position  
+0da0 77			WALK:	LD (HL),A        ; put into memory 
+0da1 be				CP (HL)          ; did it get there 
+0da2 f5				PUSH AF          ; save bit pattern 
+0da3 3e 42			LD A,"B"         ; load error code in case 
+0da5 c4 b7 0e			CALL NZ,ERR      ; report Fault B if walk failed 
+0da8 f1				POP AF           ; get bit pattern and flags from stack 
+0da9 20 03			JR NZ,LOADFF     ; if it failed jump to next test 
+0dab 17				RLA              ; move bit to next position 
+0dac 30 f2			JR NC,WALK       ; repeat until the bit reaches the carry flag 
+0dae			 
+0dae			;-------------------- Load FF test   
+0dae			LOADFF: 
+0dae 3e ff		 	LD A,0FFH      ; Store FF  
+0db0 77				LD (HL),A        ; store FF into test location 
+0db1 be				CP (HL)          ; did it get there 
+0db2 3e 43			LD A,"C"         ; load error letter in case 
+0db4 c4 b7 0e			CALL NZ,ERR      ; Fault C as FF not loaded 
+0db7			 
+0db7				; test the running of an opcode in the memory area 
+0db7			 
+0db7 7a				LD A,D           ; get error flag set in ERR routine 
+0db8 b7				OR A             ; Non-zero if error occured  
+0db9 cc ee 0d			CALL Z,OPCODETEST	; if no other errors test if opcode fetch works 
+0dbc				                    ; opcode test separate routine so we can use DJNZ to loop 
+0dbc			 
+0dbc 7a				LD A,D           ; get error flag set in ERR routine 
+0dbd b7				OR A             ; Non-zero if error occured  
+0dbe c4 c2 0e			CALL NZ,ERRORLINE   ; output a newline - or wait if too many errors 
+0dc1			 
+0dc1			;--------------------- end of check a single byte 
+0dc1 cd d4 0e			CALL CHECKKEY	; check for key press 
+0dc4						 ; unless we reset DL it does  
+0dc4			                         ; (HL) -> (DE) and DE is ROM - 0x00xx or 0x01xx 
+0dc4 54				LD	D,H	 ; reset DE for the LDI 
+0dc5 5d				LD	E,L 
+0dc6 ed a0			LDI              ; step onto next location 
+0dc8 ea 92 0d			JP PE,ZCHECK       ; loop till end reached 
+0dcb			 
+0dcb			;----------- end of walk test  
+0dcb			 
+0dcb			; drop through to ENDPAGE when done 
+0dcb			 
+0dcb			ENDPAGE:	; come here when we have finished test for one page 
+0dcb			 
+0dcb c1				POP BC		 ; get counter and port value from stack 
+0dcc 10 80			DJNZ NXTPAGE	 ; decement B and jump if not zero 
+0dce			 
+0dce				;RST PRS 
+0dce				;DEFM "End Test" 
+0dce				;DEFB CR,0 
+0dce				;CALL WAIT	 ; wait between test type 
+0dce			 
+0dce			 
+0dce			; check if we have done all tests 
+0dce 3a 89 0c			LD	A,(TESTCYCLE)	; load current test number 
+0dd1 3c				INC	A 
+0dd2 57				LD	D,A			; store for start check 
+0dd3 32 89 0c			LD	(TESTCYCLE),A		; store away again 
+0dd6 fe 03			CP	3 
+0dd8 c2 4b 0d			JP	NZ,NXTCYCLE 
+0ddb			 
+0ddb			 
+0ddb cd db 0e			CALL WAIT	 ; wait after memtest 
+0dde			 
+0dde			 
+0dde c3 46 0d			JP LOOP          ; go back to start 
+0de1			 
+0de1			;--------------------------------------- 
+0de1			; -------------------- end of main loop 
+0de1			;--------------------------------------- 
+0de1			 
+0de1			;------------------------- get page type 
+0de1			; V3 added this routine as used more than once 
+0de1			GETPAGETYPE: 
+0de1			    ; Sets C to the page type (PAGETYPE)  
+0de1			    ; Sets B to the number of pages to do ( NO64KPAGES )  
+0de1			    ;  will be *2 if doing 32k pages (PAGETYPE != 0 ) 
+0de1			    ; A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging ) 
+0de1			     
+0de1 3a 87 0c		    LD  A,(PAGETYPE)	; load the value to set the first page 
+0de4 4f				LD  C,A       	; value that starts with page 0 
+0de5 b7				OR  A		; if zero then doing 64k pages 
+0de6 3a 85 0c			LD  A, (NO64KPAGES)	; get number of pages to check 
+0de9				; next test checking previous or 
+0de9 28 01			JR  Z,GETPAGETYPE64K		; flag set by previous OR A  
+0deb						; doing 32k pages so need to double the number of tests done 
+0deb 17				RLA			; shift left == multiply by 2 ( carry bit reset by OR A ) 
+0dec							; needed so we can do 2 32k tests on each 64k page	 
+0dec			GETPAGETYPE64K: 
+0dec 47				LD  B,A			; store away for later count down 
+0ded c9			    RET 
+0dee			 
+0dee			 
+0dee			;---------------------- do opcode test 
+0dee			;                       as a subroutine as main loop was too big for JR commands 
+0dee			OPCODETEST: 
+0dee			 
+0dee			LOADOPCODE: 
+0dee e5				PUSH HL 
+0def 21 f2 0d			LD HL,DUMMY 
+0df2			DUMMY: 
+0df2 7e				LD A,(HL)	 ; dummy to get code value	 
+0df3 e1				POP HL 
+0df4 77				LD (HL),A	; LD A,(HL) 
+0df5			 
+0df5 e5				PUSH HL		; save current registers 
+0df6 d5			 	PUSH DE 
+0df7 c5				PUSH BC 
+0df8				; save current stack so we can reset it later 
+0df8 ed 73 8a 0c		LD (SAVESTACK),SP 
+0dfc			  
+0dfc				; set stack pointer for the test 
+0dfc				; LD      SP,TSTSTACK 
+0dfc				; assuming we don't need to and can use our own stack 
+0dfc				; put user pc on top of stack 
+0dfc e5				PUSH	HL	; add HL to top of stack  
+0dfd			 
+0dfd				; do step commands 
+0dfd				; set so the NMI address is our routine 
+0dfd				;  NMI address starts with a JP  
+0dfd 2a 7e 0c			LD HL,(NMI+1) 
+0e00 22 8c 0c			LD (SAVENMI),HL 
+0e03 21 16 0e			LD HL,TRAP 
+0e06 22 7e 0c			LD (NMI+1),HL 
+0e09 21 88 0c			LD HL,TESTVALUE	; point HL at the test value 
+0e0c 3e aa			LD A,0AAH	; set A and then see if it changes value 
+0e0e			 
+0e0e				; set bit 3 of p0, to activate nmi 
+0e0e f5				PUSH AF 
+0e0f 3e 08			LD   A,8 
+0e11 d3 00			OUT  (0),A 
+0e13 f1				POP  AF 
+0e14			        ; execute one step of program 
+0e14 ed 45			RETN	; not sure why RETN? 
 0e16			 
-0e16 e5				PUSH HL		; save current registers 
-0e17 d5			 	PUSH DE 
-0e18 c5				PUSH BC 
-0e19				; save current stack so we can reset it later 
-0e19 ed 73 8a 0c		LD (SAVESTACK),SP 
-0e1d			  
-0e1d				; set stack pointer for the test 
-0e1d				; LD      SP,TSTSTACK 
-0e1d				; assuming we don't need to and can use our own stack 
-0e1d				; put user pc on top of stack 
-0e1d e5				PUSH	HL	; add HL to top of stack  
-0e1e			 
-0e1e				; do step commands 
-0e1e				; set so the NMI address is our routine 
-0e1e				;  NMI address starts with a JP  
-0e1e 2a 7e 0c			LD HL,(NMI+1) 
-0e21 22 8c 0c			LD (SAVENMI),HL 
-0e24 21 37 0e			LD HL,TRAP 
-0e27 22 7e 0c			LD (NMI+1),HL 
-0e2a 21 88 0c			LD HL,TESTVALUE	; point HL at the test value 
-0e2d 3e aa			LD A,0AAH	; set A and then see if it changes value 
+0e16			; come here after nmi or bpt 
+0e16			TRAP: 
+0e16				; reset NMI address 
+0e16 2a 8c 0c			LD HL,(SAVENMI) 
+0e19 22 7e 0c			LD (NMI+1),HL 
+0e1c 32 90 0c			LD	(SAVERESULT),A	; save result 
+0e1f				; reset nmi bit in p0 
+0e1f 3a 00 0c			LD   A,(PORT0) 
+0e22 d3 00			OUT  (0),A 
+0e24			 
+0e24				; set my stack pointer 
+0e24 ed 7b 8a 0c		LD      SP,(SAVESTACK) 
+0e28			 
+0e28 c1				POP	BC	; restore registers 
+0e29 d1				POP	DE 
+0e2a e1				POP	HL 
+0e2b			 
+0e2b				; output the A register 
+0e2b 3a 90 0c			LD	A,(SAVERESULT) 
+0e2e 5f				LD	E,A 
 0e2f			 
-0e2f				; set bit 3 of p0, to activate nmi 
-0e2f f5				PUSH AF 
-0e30 3e 08			LD   A,8 
-0e32 d3 00			OUT  (0),A 
-0e34 f1				POP  AF 
-0e35			        ; execute one step of program 
-0e35 ed 45			RETN	; not sure why RETN? 
-0e37			 
-0e37			; come here after nmi or bpt 
-0e37			TRAP: 
-0e37				; reset NMI address 
-0e37 2a 8c 0c			LD HL,(SAVENMI) 
-0e3a 22 7e 0c			LD (NMI+1),HL 
-0e3d 32 90 0c			LD	(SAVERESULT),A	; save result 
-0e40				; reset nmi bit in p0 
-0e40 3a 00 0c			LD   A,(PORT0) 
-0e43 d3 00			OUT  (0),A 
-0e45			 
-0e45				; set my stack pointer 
-0e45 ed 7b 8a 0c		LD      SP,(SAVESTACK) 
-0e49			 
-0e49 c1				POP	BC	; restore registers 
-0e4a d1				POP	DE 
-0e4b e1				POP	HL 
-0e4c			 
-0e4c				; output the A register 
-0e4c 3a 90 0c			LD	A,(SAVERESULT) 
-0e4f 5f				LD	E,A 
-0e50			 
-0e50			; DEBUG - output value returned 
-0e50			;	RST     SCAL 
-0e50			;	DEFB	B2HEX 
-0e50			;	RST SCAL 
-0e50			;	DEFB SPACE       ; and space 
-0e50			 
-0e50 3a 88 0c			LD	A,(TESTVALUE)	; check if it is the same as LD A command  
-0e53 bb				CP	E 
-0e54 3e 44			LD	A,"D"	 ; set error code to D 
-0e56 c4 ec 0e			CALL NZ,ERR      ; Fault D if the LD A,TESTVALUE failed 
-0e59			 
-0e59 c9				RET 
-0e5a			 
-0e5a			; -----------------   Output TEST Start Address and page number 
-0e5a			OUTTEST:  
-0e5a f5				PUSH AF         ; save Flags 
-0e5b c5				PUSH BC         ; save port value and count 
-0e5c d5				PUSH DE         ; save addresses 
-0e5d e5				PUSH HL 
-0e5e			 
-0e5e ef				RST PRS 
-0e5f ..				DEFM "TEST:" 
-0e64 00				DEFB 0 
-0e65 cd 80 0e			CALL OUTADDR 
-0e68			 
-0e68 e1				POP HL 
-0e69 d1				POP DE 
-0e6a c1				POP BC           ; get count back 
-0e6b f1				POP AF           ; retrieve flags 
-0e6c c9				RET              ; return 
-0e6d			 
-0e6d			; -----------------   Output zeroize message  
-0e6d			;                     Start Address in DE  
-0e6d			;                     BC - port value and count 
-0e6d			OUTZERO:  
-0e6d f5				PUSH AF         ; save Flags 
-0e6e c5				PUSH BC         ; save port value and count 
-0e6f d5				PUSH DE         ; save addresses 
-0e70 e5				PUSH HL 
-0e71 ef				RST PRS 
-0e72 ..				DEFM "Zero:"  
-0e77 00				DEFB 0 
-0e78 cd 80 0e			CALL OUTADDR 
-0e7b			 
-0e7b e1				POP HL		 ; get registers back 
-0e7c d1				POP DE 
-0e7d c1				POP BC           ; get count back 
-0e7e f1				POP AF           ; retrieve flags 
-0e7f c9				RET              ; return 
-0e80			 
-0e80			; ---------------- output the current address  
-0e80			OUTADDR:  
-0e80				; extra saves so we call pull for message 
-0e80 c5				PUSH BC		; BC has port value and count 
-0e81 e5				PUSH HL		; End Address 
-0e82 d5				PUSH DE		; DE start address 
-0e83			 
-0e83 e1			  	POP HL		 ; gets start address 
-0e84 df				RST SCAL         ; print  address 
-0e85 66				DEFB TBCD3 
-0e86			 
-0e86 ef				RST PRS 
-0e87 ..				DEFM "- "  
-0e89 00				DEFB 0 
-0e8a			 
-0e8a			 
-0e8a e1			  	POP HL		 ; gets end address 
-0e8b 2b				DEC HL		 ; dec to show actual end address 
-0e8c df				RST SCAL         ; print  address 
-0e8d			 
-0e8d 66				DEFB TBCD3 
-0e8e e1			  	POP HL		 ; gets port value and count 
-0e8f cd 95 0e			CALL OUTPAGE	; output page being tested 
-0e92			 
-0e92 df				RST SCAL 
-0e93 6a				DEFB CRLF	 ; do a new line 
-0e94 c9				RET 
-0e95			 
-0e95			;------------- output page number  
-0e95			; in header area and on current line 
-0e95			OUTPAGE: ; call here to output page details in the header 
-0e95				; at the heading line 
-0e95 e5				PUSH HL		; save address to stack 
-0e96 2a 29 0c			LD HL,(CURSOR) 
-0e99 e3				EX (SP),HL	; exchange cursor value with address in stack 
-0e9a e5				PUSH HL		; re save address to stack 
-0e9b 21 ed 0b			LD HL,0BEDH	; set screen to heading line 
-0e9e 22 29 0c			LD (CURSOR),HL	 
-0ea1 e1				POP HL 		; return address 
-0ea2 cd aa 0e			CALL OUTPAGE1	; output details 
-0ea5 e3				EX (SP),HL	; get cursor and save HL 
-0ea6 22 29 0c			LD (CURSOR),HL 
-0ea9 e1				POP HL		; get address 
-0eaa			 
-0eaa			OUTPAGE1:	; call here to output page where the cursor is 
-0eaa 3a 85 0c			LD A,(NO64KPAGES) 
-0ead b7				OR A 
-0eae c8				RET Z	; return if doing non paging processing 
-0eaf ef				RST PRS 
-0eb0 ..				DEFM "pg:"      ; V2 shorten the page text to accommodate moving the address value 
-0eb3 00				DEFB 0 
-0eb4 7d				LD A,L		; bring down just the lower parts of L 
-0eb5						; which is the Port value to set page 
-0eb5 3d				DEC A		; actually the next page so reduce by 1 
-0eb6						; ( Port value incremented after setting port ) 
-0eb6 e6 3f		    	AND 3FH		; remove the 2 control bits 
-0eb8 cb 3f			SRL A		; shift to right by 1 and sets carry flag 
-0eba f5				PUSH	AF	; save the carry flag 
-0ebb df				RST SCAL    ; print  port value 
-0ebc 68				DEFB B2HEX 
-0ebd				;RST SCAL         ; output space 
-0ebd				;DEFB SPACE 
-0ebd 3a 87 0c			LD  A,(PAGETYPE) 	; check type of test 
-0ec0 b7				OR A		; or wih self will set z flag if zeros 
-0ec1 28 09			JR Z,PAGE64	; 64k tests 
-0ec3 f1				POP AF		; Get Carry flag 
-0ec4 3e 55			LD A,"U" 
-0ec6 38 02			JR C,UPPER	; if carry set then upper 32k page 
-0ec8 3e 4c			LD A,"L" 
-0eca			UPPER: 
-0eca f7			    	RST ROUT	; output the single character 
-0ecb c9				RET 
-0ecc			PAGE64:			; no further action 
-0ecc f1				POP AF 
-0ecd c9				RET 
-0ece			 
-0ece			; -----------------   Output Address in HL on header and then reset cursor  
-0ece			OUTADDHEADER:  
-0ece f5				PUSH AF         ; save Flags 
-0ecf c5				PUSH BC          ; save registers 
-0ed0 d5				PUSH DE          ;  
-0ed1 e5				PUSH HL 
-0ed2 ed 5b 29 0c		LD DE,(CURSOR)   ; get current cursor on screen 
-0ed6 21 f5 0b			LD HL,0BF5H	; set screen to heading line 
-0ed9				             ; V2 moved placment of the address value left by 1 
-0ed9 22 29 0c			LD (CURSOR),HL	 
-0edc e1				POP HL 
-0edd e5				PUSH HL 
-0ede df				RST SCAL         ; print current address 
-0edf 66				DEFB TBCD3 
-0ee0 22 83 0c			LD (STOREADDR),HL    ; save address we may bomb 
-0ee3 ed 53 29 0c		LD (CURSOR),DE   ; replace old cursor on screen 
-0ee7 e1				POP HL 
-0ee8 d1				POP DE 
-0ee9 c1				POP BC           ; get count back 
-0eea f1				POP AF           ; retrieve flags 
-0eeb c9				RET              ; return 
-0eec			 
-0eec			 
-0eec			; -----------------   Error routine 
-0eec			ERR:  
-0eec f5				PUSH AF          ; save Flags 
-0eed c5				PUSH BC          ; save count 
-0eee f7				RST ROUT         ; output error letter 
-0eef df				RST SCAL 
-0ef0 69				DEFB SPACE       ; and space 
-0ef1 df				RST SCAL         ; output address 
-0ef2 66				DEFB TBCD3 
-0ef3 14				INC D            ; tell calling code Err called 
-0ef4 c1				POP BC           ; retrieve count 
-0ef5 f1				POP AF           ; retrieve flags 
-0ef6 c9				RET              ; return 
-0ef7			 
-0ef7			; ------------------ routine to output a newline on screen 
-0ef7			;                    if an error has occurred 
-0ef7			;                    and wait if 10 errors have occurred 
-0ef7			;                    ( wait may not wait if WAITONERROR is not Zero ) 
-0ef7			ERRORLINE: 
-0ef7 df				RST SCAL 
-0ef8 6a				DEFB CRLF 
-0ef9 3a 8e 0c			LD A,(ERRORS) 
-0efc 3c				INC A 
-0efd fe 0a			CP 0AH 
-0eff 20 04			JR NZ,ERRJUSTCR 
-0f01 cd 09 0f			CALL WAIT 
-0f04 af				XOR A	; reset error count  
-0f05			ERRJUSTCR:  
-0f05 32 8e 0c			LD (ERRORS),A	; store new error count 
-0f08			 
-0f08 c9				RET 
-0f09			 
-0f09			 
-0f09			; -----------------   wait until key pressed 
-0f09			 
-0f09			WAIT: 
-0f09 f5				PUSH AF         ; save Flags 
-0f0a c5				PUSH BC          ; save count 
-0f0b d5			 	PUSH DE          ; not sure if needed but save 
-0f0c e5				PUSH HL 
-0f0d ed 5b 29 0c		LD DE,(CURSOR)   ; get current cursor on screen 
-0f11 3a 8f 0c			LD A,(WAITONERROR) 
-0f14 b7				OR A 
-0f15 20 1e			JR NZ,CONT1 
-0f17 ef				RST PRS 
-0f18 ..				DEFM "press SP, C or Q" 
-0f28 00				DEFB 0 
-0f29			 
-0f29 cf				RST RIN          ; wait for character returned in A 
-0f2a fe 20			CP " "		     ; if space carry on  
-0f2c 28 07			JR Z,CONT1     ; else jump to warn start nassys 3 
-0f2e fe 43			CP "C"		; C will continue without stopping 
-0f30 20 0f			JR NZ,NASSYS	; exit if anything else  
-0f32			 
-0f32 32 8f 0c			LD (WAITONERROR),A	; set it so it does not wait 
-0f35			 
-0f35			CONT1: 
-0f35 ed 53 29 0c		LD (CURSOR),DE   ; replace old cursor on screen 
-0f39 ef				RST PRS		; clear current line 
-0f3a 1b 00			DEFB ESC,0 
-0f3c			 
-0f3c e1				POP HL 
-0f3d d1				POP DE 
-0f3e c1				POP BC           ; get count back 
-0f3f f1				POP AF           ; retrieve flags 
-0f40 c9				RET              ; return 
-0f41			NASSYS: 
-0f41 df				RST SCAL 
-0f42 6a				DEFB CRLF	 ; do a new line 
-0f43 df				RST SCAL 	 ; return to NasSys3 
-0f44 5b				DEFB MRET 
+0e2f			; DEBUG - output value returned 
+0e2f			;	RST     SCAL 
+0e2f			;	DEFB	B2HEX 
+0e2f			;	RST SCAL 
+0e2f			;	DEFB SPACE       ; and space 
+0e2f			 
+0e2f 3a 88 0c			LD	A,(TESTVALUE)	; check if it is the same as LD A command  
+0e32 bb				CP	E 
+0e33 3e 44			LD	A,"D"	 ; set error code to D 
+0e35 c4 b7 0e			CALL NZ,ERR      ; Fault D if the LD A,TESTVALUE failed 
+0e38			 
+0e38 c9				RET 
+0e39			 
+0e39			; -----------------   Output TEST Start Address and page number 
+0e39			OUTTEST:  
+0e39			 
+0e39 ef				RST PRS 
+0e3a ..				DEFM "TEST:" 
+0e3f 00				DEFB 0 
+0e40 18 07		    JR OUTADDR      ; jump to output address 
+0e42			 
+0e42			; -----------------   Output zeroize message  
+0e42			;                     Start Address in DE  
+0e42			;                     BC - port value and count 
+0e42			OUTZERO:  
+0e42 ef				RST PRS 
+0e43 ..				DEFM "Zero:"  
+0e48 00				DEFB 0 
+0e49				 
+0e49			; drop through to output address 
+0e49			; ---------------- output the current address  
+0e49			OUTADDR:  
+0e49			    ; save registers we will use 
+0e49 c5				PUSH BC		; BC has port value and count 
+0e4a e5				PUSH HL		; End Address 
+0e4b			 
+0e4b				; extra saves so we call pull for message 
+0e4b c5				PUSH BC		; BC has port value and count 
+0e4c e5				PUSH HL		; End Address 
+0e4d d5				PUSH DE		; DE start address 
+0e4e			 
+0e4e e1			  	POP HL		 ; gets start address 
+0e4f df				RST SCAL         ; print  address 
+0e50 66				DEFB TBCD3 
+0e51			 
+0e51 ef				RST PRS 
+0e52 ..				DEFM "- "  
+0e54 00				DEFB 0 
+0e55			 
+0e55			 
+0e55 e1			  	POP HL		 ; gets end address 
+0e56 2b				DEC HL		 ; dec to show actual end address 
+0e57 df				RST SCAL         ; print  address 
+0e58			 
+0e58 66				DEFB TBCD3 
+0e59 e1			  	POP HL		 ; gets port value and count 
+0e5a cd 62 0e			CALL OUTPAGE	; output page being tested 
+0e5d			 
+0e5d df				RST SCAL 
+0e5e 6a				DEFB CRLF	 ; do a new line 
+0e5f			 
+0e5f			    ; reset registers  
+0e5f e1			    POP HL 
+0e60 c1			    POP BC 
+0e61			 
+0e61 c9				RET 
+0e62			 
+0e62			;------------- output page number  
+0e62			; in header area and on current line 
+0e62			OUTPAGE: ; call here to output page details in the header 
+0e62				; at the heading line 
+0e62 e5				PUSH HL		; save address to stack 
+0e63 2a 29 0c			LD HL,(CURSOR) 
+0e66 e3				EX (SP),HL	; exchange cursor value with address in stack 
+0e67 e5				PUSH HL		; re save address to stack 
+0e68 21 ed 0b			LD HL,0BEDH	; set screen to heading line 
+0e6b 22 29 0c			LD (CURSOR),HL	 
+0e6e e1				POP HL 		; return address 
+0e6f cd 77 0e			CALL OUTPAGE1	; output details 
+0e72 e3				EX (SP),HL	; get cursor and save HL 
+0e73 22 29 0c			LD (CURSOR),HL 
+0e76 e1				POP HL		; get address 
+0e77			 
+0e77			OUTPAGE1:	; call here to output page where the cursor is 
+0e77 3a 85 0c			LD A,(NO64KPAGES) 
+0e7a b7				OR A 
+0e7b c8				RET Z	; return if doing non paging processing 
+0e7c ef				RST PRS 
+0e7d ..				DEFM "pg:"      ; V2 shorten the page text to accommodate moving the address value 
+0e80 00				DEFB 0 
+0e81 7d				LD A,L		; bring down just the lower parts of L 
+0e82						; which is the Port value to set page 
+0e82 3d				DEC A		; actually the next page so reduce by 1 
+0e83						; ( Port value incremented after setting port ) 
+0e83 e6 3f		    	AND 3FH		; remove the 2 control bits 
+0e85 cb 3f			SRL A		; shift to right by 1 and sets carry flag 
+0e87 f5				PUSH	AF	; save the carry flag 
+0e88 df				RST SCAL    ; print  port value 
+0e89 68				DEFB B2HEX 
+0e8a				;RST SCAL         ; output space 
+0e8a				;DEFB SPACE 
+0e8a 3a 87 0c			LD  A,(PAGETYPE) 	; check type of test 
+0e8d b7				OR A		; or wih self will set z flag if zeros 
+0e8e 28 09			JR Z,PAGE64	; 64k tests 
+0e90 f1				POP AF		; Get Carry flag 
+0e91 3e 55			LD A,"U" 
+0e93 38 02			JR C,UPPER	; if carry set then upper 32k page 
+0e95 3e 4c			LD A,"L" 
+0e97			UPPER: 
+0e97 f7			    	RST ROUT	; output the single character 
+0e98 c9				RET 
+0e99			PAGE64:			; no further action 
+0e99 f1				POP AF 
+0e9a c9				RET 
+0e9b			 
+0e9b			; -----------------   Output Address in HL on header and then reset cursor  
+0e9b			OUTADDHEADER:  
+0e9b c5				PUSH BC          ; save registers BC as TBCD3 adds to C 
+0e9c d5				PUSH DE          ; No need to save A register 
+0e9d e5				PUSH HL 
+0e9e ed 5b 29 0c		LD DE,(CURSOR)   ; get current cursor on screen 
+0ea2 21 f5 0b			LD HL,0BF5H	; set screen to heading line 
+0ea5				             ; V2 moved placment of the address value left by 1 
+0ea5 22 29 0c			LD (CURSOR),HL	 
+0ea8 e1				POP HL 
+0ea9 e5				PUSH HL 
+0eaa df				RST SCAL         ; print current address 
+0eab 66				DEFB TBCD3 
+0eac 22 83 0c			LD (STOREADDR),HL    ; save address we may bomb 
+0eaf ed 53 29 0c		LD (CURSOR),DE   ; replace old cursor on screen 
+0eb3 e1				POP HL 
+0eb4 d1				POP DE 
+0eb5 c1				POP BC           ; get count back 
+0eb6 c9				RET              ; return 
+0eb7			 
+0eb7			 
+0eb7			; -----------------   Error routine 
+0eb7			ERR:  
+0eb7 f5				PUSH AF          ; save Flags 
+0eb8 c5				PUSH BC          ; save count 
+0eb9 f7				RST ROUT         ; output error letter 
+0eba df				RST SCAL 
+0ebb 69				DEFB SPACE       ; and space 
+0ebc df				RST SCAL         ; output address 
+0ebd 66				DEFB TBCD3 
+0ebe 14				INC D            ; tell calling code Err called 
+0ebf c1				POP BC           ; retrieve count 
+0ec0 f1				POP AF           ; retrieve flags 
+0ec1 c9				RET              ; return 
+0ec2			 
+0ec2			; ------------------ routine to output a newline on screen 
+0ec2			;                    if an error has occurred 
+0ec2			;                    and wait if 10 errors have occurred 
+0ec2			;                    ( wait may not wait if WAITONERROR is not Zero ) 
+0ec2			ERRORLINE: 
+0ec2 df				RST SCAL 
+0ec3 6a				DEFB CRLF 
+0ec4 3a 8e 0c			LD A,(ERRORS) 
+0ec7 3c				INC A 
+0ec8 fe 0a			CP 0AH 
+0eca 20 04			JR NZ,ERRJUSTCR 
+0ecc cd db 0e			CALL WAIT 
+0ecf af				XOR A	; reset error count  
+0ed0			ERRJUSTCR:  
+0ed0 32 8e 0c			LD (ERRORS),A	; store new error count 
+0ed3			 
+0ed3 c9				RET 
+0ed4			 
+0ed4			 
+0ed4			; ---------------------------- check for key press 
+0ed4			CHECKKEY:	; check for key press 
+0ed4			            ; removed register saves as not needed 
+0ed4 df				RST  SCAL 
+0ed5 62				DEFB ZIN	; scan for input V2 - changed to use any input to wait 
+0ed6 d0				RET   NC 
+0ed7 af				XOR  A 
+0ed8 32 8f 0c			LD (WAITONERROR),A	; reset wait on error 
+0edb			 
+0edb			; -----------------   wait until key pressed 
+0edb			 
+0edb			WAIT: 
+0edb d5			 	PUSH DE          ; DE used for cursor position 
+0edc ed 5b 29 0c		LD DE,(CURSOR)   ; get current cursor on screen 
+0ee0 3a 8f 0c			LD A,(WAITONERROR) 
+0ee3 b7				OR A 
+0ee4 20 1e			JR NZ,CONT1 
+0ee6 ef				RST PRS 
+0ee7 ..				DEFM "press SP, C or Q" 
+0ef7 00				DEFB 0 
+0ef8			 
+0ef8 cf				RST RIN          ; wait for character returned in A 
+0ef9 fe 20			CP " "		     ; if space carry on  
+0efb 28 07			JR Z,CONT1     ; else jump to warn start nassys 3 
+0efd fe 43			CP "C"		; C will continue without stopping 
+0eff 20 0c			JR NZ,NASSYS	; exit if anything else  
+0f01			 
+0f01 32 8f 0c			LD (WAITONERROR),A	; set it so it does not wait 
+0f04			 
+0f04			CONT1: 
+0f04 ed 53 29 0c		LD (CURSOR),DE   ; replace old cursor on screen 
+0f08 ef				RST PRS		; clear current line 
+0f09 1b 00			DEFB ESC,0 
+0f0b			 
+0f0b d1				POP DE           ; get old DE 
+0f0c c9				RET              ; return 
+0f0d			NASSYS: 
+0f0d df				RST SCAL 
+0f0e 6a				DEFB CRLF	 ; do a new line 
+0f0f df				RST SCAL 	 ; return to NasSys3 
+0f10 5b				DEFB MRET 
+0f11			 
+0f11			 
+0f11			;---------------------- output the range of the memory test 
+0f11			;                        
+0f11			OUTRANGE: 
+0f11 ef				RST PRS 
+0f12 ..				DEFM "S:" 
+0f14 00				DEFB 0 
+0f15			 
+0f15 2a 91 0c			LD HL,(STARTADDR)     ; start address 
+0f18 df				RST SCAL         ; print address 
+0f19 66				DEFB TBCD3 
+0f1a			 
+0f1a ef				RST PRS 
+0f1b ..				DEFM "E:" 
+0f1d 00				DEFB 0 
+0f1e 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
+0f21 2b				DEC HL 
+0f22 df				RST SCAL         ; print address 
+0f23 66				DEFB TBCD3 
+0f24 c9			    RET  
+0f25			     
+0f25			;-------------------- V3 - output the type of test  
+0f25			DISPSIZE: 
+0f25			    ; Sets C to the page type (PAGETYPE)  
+0f25			    ; Sets B to the number of pages to do ( NO64KPAGES )  
+0f25			    ;  will be *2 if doing 32k pages (PAGETYPE != 0 ) 
+0f25			    ;  A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging ) 
+0f25 cd e1 0d		    CALL GETPAGETYPE 
+0f28			     
+0f28			    ; LD  A,B     ; retrieve no64kpages - already in A 
+0f28			 
+0f28 b7				OR  A 
+0f29 28 19			JR  Z,DISPEND		; if zero then no paging 
+0f2b 79				LD A,C          ; load page type 
+0f2c b7				OR A		; check for Zero by using OR 
+0f2d 28 10			JR Z,REP64K ; if (PAGETYPE) is zero then doing 64k pages 
+0f2f						; doing 32k pages 
+0f2f ef				RST PRS 
+0f30 ..				DEFM "32K" 
+0f33 00				DEFB 0 
+0f34 79				LD A,C          ; load page type again 
+0f35 fe 80			CP 80H 
+0f37 3e 55			LD A,"U" 
+0f39 28 02			JR Z,DISPUL 
+0f3b 3e 4c			LD A,"L" 
+0f3d			DISPUL: 
+0f3d f7				RST ROUT	; output the single character 
+0f3e c9				RET         ; return as now finished 
+0f3f			REP64K: 
+0f3f ef				RST PRS 
+0f40 ..				DEFM "64K" 
+0f43 00				DEFB 0 
+0f44			DISPEND: 
+0f44 c9				RET 
 0f45			 
+0f45			; V3 moved stack to end of code 
+0f45			;  our own stack to use - also used for opcode call 
+0f45			; used values so I could check and see how much we used  
+0f45			; after run seemed to only get down to 27 leaving 28 (8 bytes ) free 
+0f45			;  so commented out the other spaces 
+0f45			STACKSPACE: 
+0f45			;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H 
+0f45			;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H 
 0f45			 
-0f45			; ---------------------------- check for key press 
-0f45			CHECKKEY:	; check for key press 
-0f45 f5			    PUSH AF ; V2 - added save of the AF registers 
-0f46 e5				PUSH HL 
-0f47 d5				PUSH DE 
-0f48 c5				PUSH BC 
-0f49 df				RST  SCAL 
-0f4a 62				DEFB ZIN	; scan for input V2 - changed to use any input to wait 
-0f4b 30 07			JR   NC,NOKEY 
-0f4d af				XOR  A 
-0f4e 32 8f 0c			LD (WAITONERROR),A	; reset wait on error 
-0f51 cd 09 0f			CALL WAIT 
-0f54			NOKEY: 
-0f54 c1				POP BC 
-0f55 d1				POP DE 
-0f56 e1				POP HL 
-0f57 f1				POP AF 
-0f58 c9				RET 
-0f59			 
-0f59			 
-0f59			; ---------------------- clear current line 
-0f59			;   not needed as cheaper to do call each time  
-0f59			;CLEARLINE: 
-0f59			;	RST PRS		; clear current line 
-0f59			;	DEFB ESC,0 
-0f59			;	RET 
-0f59			 
-0f59			 
-0f59			;---------------------- output details of the test 
-0f59			;                       returns number of blocks to do in B 
-0f59			OUTDETAILS: 
-0f59 ef				RST PRS 
-0f5a ..				DEFM "S:" 
-0f5c 00				DEFB 0 
-0f5d			 
-0f5d 2a 91 0c			LD HL,(STARTADDR)     ; start address 
-0f60 df				RST SCAL         ; print address 
-0f61 66				DEFB TBCD3 
-0f62			 
-0f62 ef				RST PRS 
-0f63 ..				DEFM "E:" 
-0f65 00				DEFB 0 
-0f66 2a 93 0c			LD HL,(ENDADDR)     ; finish address 
-0f69 2b				DEC HL 
-0f6a df				RST SCAL         ; print address 
-0f6b 66				DEFB TBCD3 
-0f6c 3a 85 0c			LD  A, (NO64KPAGES)	; get number of pages to check 
-0f6f b7				OR  A 
-0f70 47				LD  B,A 
-0f71 28 20			JR  Z,DISPEND		; if zero then no paging 
-0f73 3a 87 0c			LD A,(PAGETYPE) 
-0f76 b7				OR A		; check for Zero by using OR 
-0f77 28 15			JR Z,REP64K 
-0f79						; doing 32k pages 
-0f79 f5				PUSH AF 
-0f7a ef				RST PRS 
-0f7b ..				DEFM "32K" 
-0f7e 00				DEFB 0 
-0f7f f1				POP AF 
-0f80 fe 80			CP 80H 
-0f82 3e 55			LD A,"U" 
-0f84 28 02			JR Z,DISPUL 
-0f86 3e 4c			LD A,"L" 
-0f88			DISPUL: 
-0f88 f7				RST ROUT	; output the single character 
-0f89 78				LD  A,B 
-0f8a 17				RLA			; shift left == multiply by 2 ( carry bit reset by OR A ) 
-0f8b							; needed so we can do 2 32k tests on each 64k page	 
-0f8b 47				LD  B,A			 
-0f8c 18 05			JR DISPEND 
-0f8e			REP64K: 
-0f8e ef				RST PRS 
-0f8f ..				DEFM "64K" 
-0f92 00				DEFB 0 
-0f93			DISPEND: 
-0f93 c9				RET 
-0f94			 
-0f94			 
-0f94			;End of code 
-0f94			 
-0f94			 
+0f45 2f 2e 2d 2c 2b 2a 29 28			DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H 
+0f4d 27 26 25 24 23 22 21 20			DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H 
+0f55 1f 1e 1d 1c 1b 1a 19 18			DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H 
+0f5d 17 16 15 14 13 12 11 10			DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H 
+0f65 0f 0e 0d 0c 0b 0a 09 08			DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H 
+0f6d 07 06 05 04 03 02 01 00			DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H 
+0f75			 
+0f75			TSTSTACK:	EQU $		; the program stack starts here 
+0f75			     
+0f75			 
+0f75			 
+0f75			;End of code 
+0f75			 
+0f75			 
 # End of file m80memtp.asm
-0f94
+0f75

@@ -1,6 +1,6 @@
 ; M80MEMTP
-;   David Allday - 22 January 2021
-;        version 2
+;   David Allday - 24 January 2021
+;        version 3
 ;
 ; Memory test program for the Nascom MAP80 256k memory card
 ;  It is designed to test the paging options provided by the MAP80 256k card.
@@ -57,7 +57,7 @@
 ;   Numberof64kpages	The number of 64k memory pages to be tested.
 ;			0 - special case and NO paging is activated.
 ;			4 - standard M80 256k card fully populated
-;			10 - (16 dec) if you have 2 cards or moded the card to provide 1Mbyte.
+;			10 - (16 dec) if you have 4 cards or moded the card to provide 1Mbyte.
 ;  e.g.
 ;      EC80 8000 9000 2
 ;        will test memory from 8000 to 8FFF for 4 32k pages 
@@ -74,6 +74,51 @@
 ;         Only the low byte is used from lastpage parameter.
 ;         The end address tested is actually -1 of the endaddress value.
 ;
+; *************** OUTPUT MESSAGES 
+;
+;   The program will output a message on the top line.
+;
+;   e.g. in the default call to C80
+;      MAP80 MEMTST V3 S:8000 E:FFFF 32KU pg:00L 8888
+;      where
+;        V3     is the version of the program
+;        S:8000 is the first address to be tested
+;        E:FFFF is the last address to be tested
+;        32KU   means it is using 32k paging mode using the upper 32k of memory
+;               This can be 
+;                   32KL meaning it is using 32k paging mode using the lower 32k of memory
+;                   64K  meaning it is using 64k paging mode
+;        pg:00L shows the 32k page being tested either Lower or Upper
+;        8888   is the current byte being tested
+;
+;   A similar message is displayed on the main screen
+;
+;   S:8000 E:FFFF 08 32KU pages
+;      where
+;        S:8000 is the first address to be tested
+;        E:FFFF is the last address to be tested
+;        08     is the number of pages to be tested
+;        32KU   means it is using 32k paging mode using the upper 32k of memory
+;                This can be  
+;                   32KL meaning it is using 32k paging mode using the lower 32k of memory
+;                   64K  meaning it is using 64k paging mode
+;
+;  It then outputs a messafe for each bank as it is zeroised.  
+;        Zero:8000 - FFFF pg:00L
+;        Zero:8000 - FFFF pg:00U
+;        Zero:8000 - FFFF pg:01L 
+;        etc . . . . 
+;
+;  It then outputs a message for each bank as it is tested
+;        TEST:8000 - FFFF pg:00L
+;        TEST:8000 - FFFF pg:00U
+;        TEST:8000 - FFFF pg:01L 
+;        etc . . . . 
+;    and the current address will be displayed in the right hand side of the top line.
+;     
+;  The outputs messages will be slightly different for 64k mode and the non-paging mode
+; 
+;  Any errors encounted will be reported - see RESULTS section below.
 ;
 ; ***************   STOPPING THE PROGRAM 
 ;
@@ -115,7 +160,7 @@
 ;    space or c starts the process all over again
 ;    enter Q or any other character to return to NAS-SYS ( see "press SP, C or Q" above )
 ;
-; Results:
+; *******************  Results:
 ;  memory address with a letter A means
 ;     The memory location was not 0 when checked.
 ;         All memory locations are set to zero before the tests begin
@@ -138,6 +183,11 @@
 ;    The rout routine caould at that point update the kmap table with the space.
 ;  2.Changed to check key routine to check for any input ( keyboard or uart )
 ;
+;  Version 3 - January 2021
+;  1. changed start message to state switching x type pages
+;            e.g. switching 8 32KU pages  ( 32k pages into upper 32k of memory )
+;  2. moved stack to end of code
+;  3. optimised some of the code to save space
 ;
 ; Nas-Sys Equates
 
@@ -214,21 +264,6 @@ SAVERESULT:	DEFB	0H	; save the returned byte
 STARTADDR:	DEFW	08000H	; start address for test of a page
 ENDADDR:	DEFW	00000H	; end address for test of a page
 
-;  our own stack to use - also used for opcode call
-; used values so I could check and see how much we used 
-; after run seemed to only get down to 2B leaving 2C (4 bytes ) free
-;  so commented out the other spaces
-STACKSPACE:
-;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H
-;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H
-		DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H
-		DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H
-		DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H
-		DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H
-		DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H
-		DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H
-
-TSTSTACK:	EQU $		; the program stack starts at this for OPCODE call
 
 START:	
 	LD SP,TSTSTACK		; use our own stack
@@ -242,7 +277,7 @@ START:
 	DEFB ESC,0
 
 	RST PRS
-	DEFM "MAP80 MEMTST V2"
+	DEFM "MAP80 MEMTST V3"
 	DEFB 0
 
 	POP HL		; restore cursor position
@@ -267,9 +302,6 @@ START:
 	
 FOUR:	LD A,(ARG4)		; just the low bytes from this parameter
 	; allow 0 as a special case - means no paging 
-	;OR A			; check it is not 0 
-	;JR NZ,FOUROK
-	;INC A			; if zero make it 1
 FOUROK:
 	LD (NO64KPAGES),A	; store number of 64k pages to process
 
@@ -307,16 +339,6 @@ TOP32K: LD A,080H	; value to output to use the upper 32k for paging
 	LD B,A
 	JR SETPAGETYPE
 
-; ---------------------- parameters are incorrect
-;PARAMERR:
-;	RST 	PRS
-;	DEFB	CR
-;	DEFM 	"ERROR"
-;	DEFB 	CR,0
-;	RST SCAL 	 ; return to NasSys3
-;	DEFB MRET
-
-
 FULL64K: 
 	LD A,00H	; value to output to test the first 64k page
 	LD B,A
@@ -330,33 +352,45 @@ SETPAGETYPE:
 ; ------------------------- display details about the test.
 DISPLAYSTART:
 
-	LD    HL,(CURSOR)	; hold current cursor position
-	PUSH  HL
+	LD  DE,(CURSOR)	; hold current cursor position
 	LD	HL,0BDAH	; set screen to heading line
 	LD (CURSOR),HL
-	CALL OUTDETAILS
-				; move onto screen and repeat details
-	;RST SCAL
-	;DEFB CRLF	 ; do a new line
+	CALL OUTRANGE   ; test range 
+	CALL DISPSIZE   ; test type 32k or 64k and paging ?
+	LD (CURSOR),DE ; put cursor back onto main screen
 
-	POP HL			; put cursor back onto main screen
-	LD (CURSOR),HL
+    ; move onto screen and repeat details
+	CALL OUTRANGE
 
-	CALL OUTDETAILS
-	LD  A,B		; Number set earlier if 32k or 64k
-	OR A		; check number of pages
+    CALL GETPAGETYPE
+    ; Sets C to the page type (PAGETYPE) 
+    ; Sets B to the number of pages to do ( NO64KPAGES ) 
+    ;  will be *2 if doing 32k pages (PAGETYPE != 0 )
+    ; A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging )
+    
+    OR A
 	JR Z,NOPAGING	; zero means no paging 
+
 	RST PRS
-	DEFM " using "
+	DEFM "switching "
 	DEFB 0
-	LD  A,B		; Number set earlier if 32k or 64k
+
+	LD  A,B		; Number set earlier by GETPAGETYPE 
 	RST SCAL        ; print  count number
 	DEFB B2HEX
+	RST SCAL        ; print space
+	DEFB SPACE
+	
+	CALL DISPSIZE   ; output type of test being done
+
 	RST PRS
-	DEFM " blocks"
+	DEFM " pages"
 	DEFB 0
 	JR  WAITSTART
+
 NOPAGING:
+    ; nothing to do if not paging
+    
 WAITSTART:	
 
 ; new line before we start the test
@@ -385,24 +419,17 @@ NXTCYCLE:	; move to next cycle
 
 PAGESTART:	; start here for new pages
 
-	LD  B,A
-    LD  A,(PAGETYPE)	; load the value to set the first page
-	LD  C,A       	; value that starts with page 0
-	OR  A		; if zero then doing 64k pages
-	LD  A, (NO64KPAGES)	; get number of pages to check
-	JR  Z,PSTART64K		; flag set by previous OR A 
-			; doing 32k pages so need to double the number of tests done
-	RLA			; shift left == multiply by 2 ( carry bit reset by OR A )
-				; needed so we can do 2 32k tests on each 64k page	
-PSTART64K:
-	
-	LD  B,A			; store away for later count down
+    CALL GETPAGETYPE    
+    ; Sets C to the page type (PAGETYPE) 
+    ; Sets B to the number of pages to do ( NO64KPAGES ) 
+    ;  will be *2 if doing 32k pages (PAGETYPE != 0 )
+    ;
 
 NXTPAGE:
 	LD A,B		; retrieve counter to check if paging 
 	OR A		; should only be zero first time if not paging
 	JR Z,SKIPPAGING	; if the count was zero then no paging 
-	LD A,C
+	LD A,C          ; get page type - the value to set the page mode
 	OUT (0FEH),A	; set memory
 	LD A,(PAGEINCR) ; will only add 1 or 2 to the C register ready for next page         
 	ADD A,C
@@ -439,7 +466,7 @@ ZERO:
 	; LDIR has an issue if any ROM in the way
 	;  so doing own loop
 	;  We need to implicity set each address to zero
-        ; the LDI instruction moved (DE) to (HL) but they are the same address.
+        ; the LDI instruction moves (DE) to (HL) but they are the same address.
 ZBYTE:
 	; removed these as sloowwww down the zeroise process
 	; CALL OUTADDHEADER	 ; put address on screen
@@ -498,6 +525,7 @@ LOADFF:
 	LD A,D           ; get error flag set in ERR routine
 	OR A             ; Non-zero if error occured 
 	CALL Z,OPCODETEST	; if no other errors test if opcode fetch works
+	                    ; opcode test separate routine so we can use DJNZ to loop
 
 	LD A,D           ; get error flag set in ERR routine
 	OR A             ; Non-zero if error occured 
@@ -535,17 +563,9 @@ ENDPAGE:	; come here when we have finished test for one page
 	CP	3
 	JP	NZ,NXTCYCLE
 
-			 ; removed unneeded display			 
-;	RST PRS          ; say we are looping
-;	DEFM "DONE"
-;	DEFB CR,0
 
 	CALL WAIT	 ; wait after memtest
 
-			 ; removed unneeded display			 
-;	RST PRS          ; say we are looping
-;	DEFM "LOOPING"
-;	DEFB CR,0
 
 	JP LOOP          ; go back to start
 
@@ -553,6 +573,26 @@ ENDPAGE:	; come here when we have finished test for one page
 ; -------------------- end of main loop
 ;---------------------------------------
 
+;------------------------- get page type
+; V3 added this routine as used more than once
+GETPAGETYPE:
+    ; Sets C to the page type (PAGETYPE) 
+    ; Sets B to the number of pages to do ( NO64KPAGES ) 
+    ;  will be *2 if doing 32k pages (PAGETYPE != 0 )
+    ; A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging )
+    
+    LD  A,(PAGETYPE)	; load the value to set the first page
+	LD  C,A       	; value that starts with page 0
+	OR  A		; if zero then doing 64k pages
+	LD  A, (NO64KPAGES)	; get number of pages to check
+	; next test checking previous or
+	JR  Z,GETPAGETYPE64K		; flag set by previous OR A 
+			; doing 32k pages so need to double the number of tests done
+	RLA			; shift left == multiply by 2 ( carry bit reset by OR A )
+				; needed so we can do 2 32k tests on each 64k page	
+GETPAGETYPE64K:
+	LD  B,A			; store away for later count down
+    RET
 
 
 ;---------------------- do opcode test
@@ -633,43 +673,27 @@ TRAP:
 
 ; -----------------   Output TEST Start Address and page number
 OUTTEST: 
-	PUSH AF         ; save Flags
-	PUSH BC         ; save port value and count
-	PUSH DE         ; save addresses
-	PUSH HL
 
 	RST PRS
 	DEFM "TEST:"
 	DEFB 0
-	CALL OUTADDR
-
-	POP HL
-	POP DE
-	POP BC           ; get count back
-	POP AF           ; retrieve flags
-	RET              ; return
+    JR OUTADDR      ; jump to output address
 
 ; -----------------   Output zeroize message 
 ;                     Start Address in DE 
 ;                     BC - port value and count
 OUTZERO: 
-	PUSH AF         ; save Flags
-	PUSH BC         ; save port value and count
-	PUSH DE         ; save addresses
-	PUSH HL
 	RST PRS
 	DEFM "Zero:" 
 	DEFB 0
-	CALL OUTADDR
-
-	POP HL		 ; get registers back
-	POP DE
-	POP BC           ; get count back
-	POP AF           ; retrieve flags
-	RET              ; return
-
+	
+; drop through to output address
 ; ---------------- output the current address 
 OUTADDR: 
+    ; save registers we will use
+	PUSH BC		; BC has port value and count
+	PUSH HL		; End Address
+
 	; extra saves so we call pull for message
 	PUSH BC		; BC has port value and count
 	PUSH HL		; End Address
@@ -694,6 +718,11 @@ OUTADDR:
 
 	RST SCAL
 	DEFB CRLF	 ; do a new line
+
+    ; reset registers 
+    POP HL
+    POP BC
+
 	RET
 
 ;------------- output page number 
@@ -746,9 +775,8 @@ PAGE64:			; no further action
 
 ; -----------------   Output Address in HL on header and then reset cursor 
 OUTADDHEADER: 
-	PUSH AF         ; save Flags
-	PUSH BC          ; save registers
-	PUSH DE          ; 
+	PUSH BC          ; save registers BC as TBCD3 adds to C
+	PUSH DE          ; No need to save A register
 	PUSH HL
 	LD DE,(CURSOR)   ; get current cursor on screen
 	LD HL,0BF5H	; set screen to heading line
@@ -763,7 +791,6 @@ OUTADDHEADER:
 	POP HL
 	POP DE
 	POP BC           ; get count back
-	POP AF           ; retrieve flags
 	RET              ; return
 
 
@@ -800,13 +827,19 @@ ERRJUSTCR:
 	RET
 
 
+; ---------------------------- check for key press
+CHECKKEY:	; check for key press
+            ; removed register saves as not needed
+	RST  SCAL
+	DEFB ZIN	; scan for input V2 - changed to use any input to wait
+	RET   NC
+	XOR  A
+	LD (WAITONERROR),A	; reset wait on error
+
 ; -----------------   wait until key pressed
 
 WAIT:
-	PUSH AF         ; save Flags
-	PUSH BC          ; save count
- 	PUSH DE          ; not sure if needed but save
-	PUSH HL
+ 	PUSH DE          ; DE used for cursor position
 	LD DE,(CURSOR)   ; get current cursor on screen
 	LD A,(WAITONERROR)
 	OR A
@@ -828,10 +861,7 @@ CONT1:
 	RST PRS		; clear current line
 	DEFB ESC,0
 
-	POP HL
-	POP DE
-	POP BC           ; get count back
-	POP AF           ; retrieve flags
+	POP DE           ; get old DE
 	RET              ; return
 NASSYS:
 	RST SCAL
@@ -840,37 +870,9 @@ NASSYS:
 	DEFB MRET
 
 
-; ---------------------------- check for key press
-CHECKKEY:	; check for key press
-    PUSH AF ; V2 - added save of the AF registers
-	PUSH HL
-	PUSH DE
-	PUSH BC
-	RST  SCAL
-	DEFB ZIN	; scan for input V2 - changed to use any input to wait
-	JR   NC,NOKEY
-	XOR  A
-	LD (WAITONERROR),A	; reset wait on error
-	CALL WAIT
-NOKEY:
-	POP BC
-	POP DE
-	POP HL
-	POP AF
-	RET
-
-
-; ---------------------- clear current line
-;   not needed as cheaper to do call each time 
-;CLEARLINE:
-;	RST PRS		; clear current line
-;	DEFB ESC,0
-;	RET
-
-
-;---------------------- output details of the test
-;                       returns number of blocks to do in B
-OUTDETAILS:
+;---------------------- output the range of the memory test
+;                       
+OUTRANGE:
 	RST PRS
 	DEFM "S:"
 	DEFB 0
@@ -886,36 +888,60 @@ OUTDETAILS:
 	DEC HL
 	RST SCAL         ; print address
 	DEFB TBCD3
-	LD  A, (NO64KPAGES)	; get number of pages to check
+    RET 
+    
+;-------------------- V3 - output the type of test 
+DISPSIZE:
+    ; Sets C to the page type (PAGETYPE) 
+    ; Sets B to the number of pages to do ( NO64KPAGES ) 
+    ;  will be *2 if doing 32k pages (PAGETYPE != 0 )
+    ;  A == B and the Z flag is set if PAGETYPE == 0 ( 64k paging )
+    CALL GETPAGETYPE
+    
+    ; LD  A,B     ; retrieve no64kpages - already in A
+
 	OR  A
-	LD  B,A
 	JR  Z,DISPEND		; if zero then no paging
-	LD A,(PAGETYPE)
+	LD A,C          ; load page type
 	OR A		; check for Zero by using OR
-	JR Z,REP64K
+	JR Z,REP64K ; if (PAGETYPE) is zero then doing 64k pages
 			; doing 32k pages
-	PUSH AF
 	RST PRS
 	DEFM "32K"
 	DEFB 0
-	POP AF
+	LD A,C          ; load page type again
 	CP 80H
 	LD A,"U"
 	JR Z,DISPUL
 	LD A,"L"
 DISPUL:
 	RST ROUT	; output the single character
-	LD  A,B
-	RLA			; shift left == multiply by 2 ( carry bit reset by OR A )
-				; needed so we can do 2 32k tests on each 64k page	
-	LD  B,A			
-	JR DISPEND
+	RET         ; return as now finished
 REP64K:
 	RST PRS
 	DEFM "64K"
 	DEFB 0
 DISPEND:
 	RET
+
+; V3 moved stack to end of code
+;  our own stack to use - also used for opcode call
+; used values so I could check and see how much we used 
+; after run seemed to only get down to 27 leaving 28 (8 bytes ) free
+;  so commented out the other spaces
+STACKSPACE:
+;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H
+;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H
+
+		DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H
+		DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H
+		DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H
+		DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H
+		DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H
+		DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H
+
+TSTSTACK:	EQU $		; the program stack starts here
+    
 
 
 ;End of code
