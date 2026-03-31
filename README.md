@@ -1,4 +1,4 @@
-# map80memorytest
+# map80memorytest version 6
 
 This program is designed to run on a NASCOM2 Z80 computer.
 
@@ -6,11 +6,13 @@ This is a memory test program for the Nascom MAP80 256k memory card.
   It is designed to test the paging options provided by the MAP80 256k card.
     but can be used to test nonpaged memory by setting Numberof64kpages to 0.
 
+The main change for Version 6 was to avoid an issue on the Nascom4 system and the serial port. 
+
 See map80memtp.asm for full details on using the program.
 
-See readme.txt for details on assembling the program.
+See readme.txt for details on assembling the program using z80asm on a linux system.
 
-You will need to set the execute flag on the build and compile.sh files if you want to use them.
+You will need to set the "execute" flag on the build and compile.sh files if you want to use them.
 
 File name | Description
 ----------|------------
