@@ -8,11 +8,15 @@ This is a memory test program for the Nascom MAP80 256k memory card.
 
 m80memtp - stands for M80MEMoryTestPaging
 
-The main change for Version 6 was to avoid an issue on the Nascom4 system and the serial port. 
-
+The main change for Version 6 was to avoid an issue on the Nascom4 system and the serial port.  
+It also added a cycle number to the top screen so you know how many times the test has run.  
 Version 7 was a fix to version 6 to get the top line on the screen correct :(
 
 See m80memtp.asm for full details on using the program.
+
+Usage:- 
+  E C80 8000 9000 2
+This will test from address 8000 to 8FFF using 4 32k pages 
 
 See readme.txt for details on assembling the program using z80asm on a linux system.
 
