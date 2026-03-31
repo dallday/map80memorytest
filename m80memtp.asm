@@ -1,6 +1,6 @@
 ; M80MEMTP
-;   David Allday - 24 January 2021
-;        version 3
+;   David Allday - 31 March 2026
+;        version 6
 ;
 ; Memory test program for the Nascom MAP80 256k memory card
 ;  It is designed to test the paging options provided by the MAP80 256k card.
@@ -85,7 +85,7 @@
 ;        S:8000 is the first address to be tested
 ;        E:FFFF is the last address to be tested
 ;        32KU   means it is using 32k paging mode using the upper 32k of memory
-;               This can be 
+;               This can be https://duckduckgo.com/?t=ffab&q=nascom+2+keyboard+schematic&ia=web
 ;                   32KL meaning it is using 32k paging mode using the lower 32k of memory
 ;                   64K  meaning it is using 64k paging mode
 ;        pg:00L shows the 32k page being tested either Lower or Upper
@@ -188,7 +188,12 @@
 ;            e.g. switching 8 32KU pages  ( 32k pages into upper 32k of memory )
 ;  2. moved stack to end of code
 ;  3. optimised some of the code to save space
-;
+;  Version 5 - March 2021
+;  1. added cycle number to see what test cycle you are on
+;  Version 6 - March 2026
+;  1. changed the keyboard interrup to ignore null characters 
+;      a problem with Nascom4 and the inverted serial inputs
+
 ; Nas-Sys Equates
 
 PORT0:	EQU	0C00H	; copy of port 0
@@ -252,7 +257,8 @@ PAGETYPE: DEFB	00		; the value to be loaded into OFE to set the first page
 			
 
 TESTVALUE:	DEFB	055H	; what to load to the memory
-TESTCYCLE: 	DEFB	0	; Test cycle - either set memory to zero or do tests
+TESTPART: 	DEFB	0	; Test part - either set memory to zero or do tests
+TESTCYCLE:  DEFW    0   ; test cycle increments after each successful test
 SAVESTACK:	DEFW	0H	; save Stack pointer before doing NMI
 SAVENMI:	DEFW	0H	; save area for old NMI address
 ERRORS:		DEFB	0H	; how many errors have occurred
@@ -273,12 +279,7 @@ START:
 
 	LD   HL,0BCAH	; set screen to heading line
 	LD (CURSOR),HL	
-	RST PRS		; clear current line
-	DEFB ESC,0
-
-	RST PRS
-	DEFM "MAP80 MEMTST V3"
-	DEFB 0
+    CALL DISPTITLE
 
 	POP HL		; restore cursor position
 	LD (CURSOR),HL	
@@ -352,6 +353,8 @@ SETPAGETYPE:
 ; ------------------------- display details about the test.
 DISPLAYSTART:
 
+    LD HL,0             ; reset the test cycles
+    LD (TESTCYCLE),HL
 	LD  DE,(CURSOR)	; hold current cursor position
 	LD	HL,0BDAH	; set screen to heading line
 	LD (CURSOR),HL
@@ -360,6 +363,7 @@ DISPLAYSTART:
 	LD (CURSOR),DE ; put cursor back onto main screen
 
     ; move onto screen and repeat details
+    CALL DISPTITLE
 	CALL OUTRANGE
 
     CALL GETPAGETYPE
@@ -372,7 +376,7 @@ DISPLAYSTART:
 	JR Z,NOPAGING	; zero means no paging 
 
 	RST PRS
-	DEFM "switching "
+	DEFM "using "
 	DEFB 0
 
 	LD  A,B		; Number set earlier by GETPAGETYPE 
@@ -409,13 +413,14 @@ WAITSTART:
 
 LOOP:	; start by setting test type
 	
-	LD	A,1		; 2 cycles ( zerioise and then test )
-	;   firstly to zeroize all pages
-	;   second to do bit walk
+	LD	A,1		; 2 cycles ( zeroise and then test )
+	;   
+	;   1 = firstly to zeroize all pages
+	;   0 = second to do bit walk
 	;             and opcode test
-	LD	(TESTCYCLE),A
+	LD	(TESTPART),A
 
-NXTCYCLE:	; move to next cycle
+NXTPART:	; move to next part
 
 PAGESTART:	; start here for new pages
 
@@ -444,8 +449,8 @@ SETADDRESS:
 	LD DE,(STARTADDR)     ; start address
 
 	; decide which test is being done
-	LD	A,(TESTCYCLE)	; check what test we are doing
-	CP	2
+	LD	A,(TESTPART)	; check what test we are doing
+	OR A
 	JP	Z,BITWALK
 	; else number 1 is zero all memory
 
@@ -556,16 +561,29 @@ ENDPAGE:	; come here when we have finished test for one page
 
 
 ; check if we have done all tests
-	LD	A,(TESTCYCLE)	; load current test number
-	INC	A
+	LD	A,(TESTPART)	; load current test number
+	DEC A
 	LD	D,A			; store for start check
-	LD	(TESTCYCLE),A		; store away again
-	CP	3
-	JP	NZ,NXTCYCLE
-
+	LD	(TESTPART),A		; store away again
+	
+	JP	P,NXTPART  ; still positive after dec do do anther part
 
 	CALL WAIT	 ; wait after memtest
 
+    ; increment the test cycle
+	LD   DE,(CURSOR)	; save current cursor position
+	LD   HL,0BD5H	    ; set screen to heading line
+	LD (CURSOR),HL
+	RST PRS
+	DEFM "C:"
+	DEFB 0
+    LD HL,(TESTCYCLE)
+    INC HL
+    LD (TESTCYCLE),HL
+	RST SCAL         ; print  number
+	DEFB TBCD3
+	LD (CURSOR),DE
+        
 
 	JP LOOP          ; go back to start
 
@@ -832,7 +850,9 @@ CHECKKEY:	; check for key press
             ; removed register saves as not needed
 	RST  SCAL
 	DEFB ZIN	; scan for input V2 - changed to use any input to wait
-	RET   NC
+	RET  NC
+    OR   A      ; look for null character 
+    RET  Z     ; if so ignore 
 	XOR  A
 	LD (WAITONERROR),A	; reset wait on error
 
@@ -848,11 +868,14 @@ WAIT:
 	DEFM "press SP, C or Q"
 	DEFB 0
 
+WAIT1:
 	RST RIN          ; wait for character returned in A
+    CP "Q"           ; V6 added check that Q pressed to quit
+    JR Z,NASSYS      ; return to Nassys
 	CP " "		     ; if space carry on 
-	JR Z,CONT1     ; else jump to warn start nassys 3
-	CP "C"		; C will continue without stopping
-	JR NZ,NASSYS	; exit if anything else 
+	JR Z,CONT1      ; else jump to warn start nassys 3
+	CP "C"		    ; C will continue without stopping
+	JR NZ,WAIT1 	; continue to wait if anything else 
 
 	LD (WAITONERROR),A	; set it so it does not wait
 
@@ -923,6 +946,14 @@ REP64K:
 	DEFB 0
 DISPEND:
 	RET
+
+DISPTITLE:
+	RST PRS		; clear current line
+	DEFB ESC,0
+	RST PRS
+	DEFM "MAP80MEMTP V6 "
+	DEFB 0
+    RET
 
 ; V3 moved stack to end of code
 ;  our own stack to use - also used for opcode call
