@@ -1,6 +1,6 @@
 ; M80MEMTP
 ;   David Allday - 31 March 2026
-;        version 6
+;        version 7
 ;
 ; Memory test program for the Nascom MAP80 256k memory card
 ;  It is designed to test the paging options provided by the MAP80 256k card.
@@ -79,13 +79,13 @@
 ;   The program will output a message on the top line.
 ;
 ;   e.g. in the default call to C80
-;      MAP80 MEMTST V3 S:8000 E:FFFF 32KU pg:00L 8888
+;      M80MEMTP V3 S:8000 E:FFFF 32KU pg:00L 8888
 ;      where
 ;        V3     is the version of the program
 ;        S:8000 is the first address to be tested
 ;        E:FFFF is the last address to be tested
 ;        32KU   means it is using 32k paging mode using the upper 32k of memory
-;               This can be https://duckduckgo.com/?t=ffab&q=nascom+2+keyboard+schematic&ia=web
+;               This can be 
 ;                   32KL meaning it is using 32k paging mode using the lower 32k of memory
 ;                   64K  meaning it is using 64k paging mode
 ;        pg:00L shows the 32k page being tested either Lower or Upper
@@ -193,6 +193,10 @@
 ;  Version 6 - March 2026
 ;  1. changed the keyboard interrup to ignore null characters 
 ;      a problem with Nascom4 and the inverted serial inputs
+;  Version 7 - March 2026
+;  1. change the display on the header line as the Cycle number was in wrong place
+;      and program title was wrong :(
+;
 
 ; Nas-Sys Equates
 
@@ -572,7 +576,8 @@ ENDPAGE:	; come here when we have finished test for one page
 
     ; increment the test cycle
 	LD   DE,(CURSOR)	; save current cursor position
-	LD   HL,0BD5H	    ; set screen to heading line
+	LD   HL,0BD3H	    ; set screen to heading line
+                        ; overwrites the Version with cycle
 	LD (CURSOR),HL
 	RST PRS
 	DEFM "C:"
@@ -951,7 +956,7 @@ DISPTITLE:
 	RST PRS		; clear current line
 	DEFB ESC,0
 	RST PRS
-	DEFM "MAP80MEMTP V6 "
+	DEFM "M80MEMTP V7"
 	DEFB 0
     RET
 

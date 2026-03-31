@@ -1,7 +1,7 @@
 # File m80memtp.asm
 0000			; M80MEMTP 
 0000			;   David Allday - 31 March 2026 
-0000			;        version 6 
+0000			;        version 7 
 0000			; 
 0000			; Memory test program for the Nascom MAP80 256k memory card 
 0000			;  It is designed to test the paging options provided by the MAP80 256k card. 
@@ -80,13 +80,13 @@
 0000			;   The program will output a message on the top line. 
 0000			; 
 0000			;   e.g. in the default call to C80 
-0000			;      MAP80 MEMTST V3 S:8000 E:FFFF 32KU pg:00L 8888 
+0000			;      M80MEMTP V3 S:8000 E:FFFF 32KU pg:00L 8888 
 0000			;      where 
 0000			;        V3     is the version of the program 
 0000			;        S:8000 is the first address to be tested 
 0000			;        E:FFFF is the last address to be tested 
 0000			;        32KU   means it is using 32k paging mode using the upper 32k of memory 
-0000			;               This can be https://duckduckgo.com/?t=ffab&q=nascom+2+keyboard+schematic&ia=web 
+0000			;               This can be  
 0000			;                   32KL meaning it is using 32k paging mode using the lower 32k of memory 
 0000			;                   64K  meaning it is using 64k paging mode 
 0000			;        pg:00L shows the 32k page being tested either Lower or Upper 
@@ -194,6 +194,10 @@
 0000			;  Version 6 - March 2026 
 0000			;  1. changed the keyboard interrup to ignore null characters  
 0000			;      a problem with Nascom4 and the inverted serial inputs 
+0000			;  Version 7 - March 2026 
+0000			;  1. change the display on the header line as the Cycle number was in wrong place 
+0000			;      and program title was wrong :( 
+0000			; 
 0000			 
 0000			; Nas-Sys Equates 
 0000			 
@@ -273,7 +277,7 @@
 0c97			 
 0c97			 
 0c97			START:	 
-0c97 31 9d 0f			LD SP,TSTSTACK		; use our own stack 
+0c97 31 9a 0f			LD SP,TSTSTACK		; use our own stack 
 0c9a			 
 0c9a 2a 29 0c			LD   HL,(CURSOR)	; save current cursor position 
 0c9d e5				PUSH HL 
@@ -573,7 +577,8 @@
 0dd1			 
 0dd1			    ; increment the test cycle 
 0dd1 ed 5b 29 0c		LD   DE,(CURSOR)	; save current cursor position 
-0dd5 21 d5 0b			LD   HL,0BD5H	    ; set screen to heading line 
+0dd5 21 d3 0b			LD   HL,0BD3H	    ; set screen to heading line 
+0dd8			                        ; overwrites the Version with cycle 
 0dd8 22 29 0c			LD (CURSOR),HL 
 0ddb ef				RST PRS 
 0ddc ..				DEFM "C:" 
@@ -952,32 +957,32 @@
 0f59 ef				RST PRS		; clear current line 
 0f5a 1b 00			DEFB ESC,0 
 0f5c ef				RST PRS 
-0f5d ..				DEFM "MAP80MEMTP V6 " 
-0f6b 00				DEFB 0 
-0f6c c9			    RET 
-0f6d			 
-0f6d			; V3 moved stack to end of code 
-0f6d			;  our own stack to use - also used for opcode call 
-0f6d			; used values so I could check and see how much we used  
-0f6d			; after run seemed to only get down to 27 leaving 28 (8 bytes ) free 
-0f6d			;  so commented out the other spaces 
-0f6d			STACKSPACE: 
-0f6d			;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H 
-0f6d			;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H 
-0f6d			 
-0f6d 2f 2e 2d 2c 2b 2a 29 28			DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H 
-0f75 27 26 25 24 23 22 21 20			DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H 
-0f7d 1f 1e 1d 1c 1b 1a 19 18			DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H 
-0f85 17 16 15 14 13 12 11 10			DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H 
-0f8d 0f 0e 0d 0c 0b 0a 09 08			DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H 
-0f95 07 06 05 04 03 02 01 00			DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H 
-0f9d			 
-0f9d			TSTSTACK:	EQU $		; the program stack starts here 
-0f9d			     
-0f9d			 
-0f9d			 
-0f9d			;End of code 
-0f9d			 
-0f9d			 
+0f5d ..				DEFM "M80MEMTP V7" 
+0f68 00				DEFB 0 
+0f69 c9			    RET 
+0f6a			 
+0f6a			; V3 moved stack to end of code 
+0f6a			;  our own stack to use - also used for opcode call 
+0f6a			; used values so I could check and see how much we used  
+0f6a			; after run seemed to only get down to 27 leaving 28 (8 bytes ) free 
+0f6a			;  so commented out the other spaces 
+0f6a			STACKSPACE: 
+0f6a			;		DEFB 	3FH, 3EH, 3DH, 3CH, 3BH, 3AH, 39H, 38H 
+0f6a			;		DEFB 	37H, 36H, 35H, 34H, 33H, 32H, 31H, 30H 
+0f6a			 
+0f6a 2f 2e 2d 2c 2b 2a 29 28			DEFB 	2FH, 2EH, 2DH, 2CH, 2BH, 2AH, 29H, 28H 
+0f72 27 26 25 24 23 22 21 20			DEFB 	27H, 26H, 25H, 24H, 23H, 22H, 21H, 20H 
+0f7a 1f 1e 1d 1c 1b 1a 19 18			DEFB 	1FH, 1EH, 1DH, 1CH, 1BH, 1AH, 19H, 18H 
+0f82 17 16 15 14 13 12 11 10			DEFB 	17H, 16H, 15H, 14H, 13H, 12H, 11H, 10H 
+0f8a 0f 0e 0d 0c 0b 0a 09 08			DEFB 	0FH, 0EH, 0DH, 0CH, 0BH, 0AH, 09H, 08H 
+0f92 07 06 05 04 03 02 01 00			DEFB 	07H, 06H, 05H, 04H, 03H, 02H, 01H, 00H 
+0f9a			 
+0f9a			TSTSTACK:	EQU $		; the program stack starts here 
+0f9a			     
+0f9a			 
+0f9a			 
+0f9a			;End of code 
+0f9a			 
+0f9a			 
 # End of file m80memtp.asm
-0f9d
+0f9a
