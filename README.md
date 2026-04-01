@@ -1,4 +1,4 @@
-# map80memorytest (m80memtp) version 7
+# map80memorytest (m80memtp) 
 
 This program is designed to run on a NASCOM2 Z80 computer.
 
