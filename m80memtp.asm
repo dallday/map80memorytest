@@ -1,6 +1,6 @@
 ; M80MEMTP
-;   David Allday - 24 January 2021
-;        version 3
+;   David Allday - 2 April 2026
+;        version 4
 ;
 ; Memory test program for the Nascom MAP80 256k memory card
 ;  It is designed to test the paging options provided by the MAP80 256k card.
@@ -16,6 +16,10 @@
 ;     ( unless page count set to 0 and you avoid the ram used by NASSYS and this program )
 ;
 ;  The progam will always be in memory 0C80H no matter what paging it does.
+;
+;  Note it will end the test at the end address - 1 
+;        so E C80 1000 2000
+;     will test the memory from 1000H to 1FFFH 
 ;
 ;  if start address is between 1000H and 7FFFH and the end address is 8000H or below then
 ;        it will test each 32k page using the lower 32k of memory.
@@ -79,9 +83,10 @@
 ;   The program will output a message on the top line.
 ;
 ;   e.g. in the default call to C80
-;      MAP80 MEMTST V3 S:8000 E:FFFF 32KU pg:00L 8888
+;      the top line will show
+;      M80MEMTP V8     S:8000 E:FFFF 32KU pg:00L 8888
 ;      where
-;        V3     is the version of the program
+;        V8     is the version of the program
 ;        S:8000 is the first address to be tested
 ;        E:FFFF is the last address to be tested
 ;        32KU   means it is using 32k paging mode using the upper 32k of memory
@@ -93,7 +98,7 @@
 ;
 ;   A similar message is displayed on the main screen
 ;
-;   S:8000 E:FFFF 08 32KU pages
+;   M80MEMTP V8 S:8000 E:FFFF 08 32KU pages
 ;      where
 ;        S:8000 is the first address to be tested
 ;        E:FFFF is the last address to be tested
@@ -103,7 +108,7 @@
 ;                   32KL meaning it is using 32k paging mode using the lower 32k of memory
 ;                   64K  meaning it is using 64k paging mode
 ;
-;  It then outputs a messafe for each bank as it is zeroised.  
+;  It then outputs a message for each bank as it is zeroised.  
 ;        Zero:8000 - FFFF pg:00L
 ;        Zero:8000 - FFFF pg:00U
 ;        Zero:8000 - FFFF pg:01L 
@@ -120,6 +125,13 @@
 ; 
 ;  Any errors encounted will be reported - see RESULTS section below.
 ;
+;  For the second and subsequent test cycles the message on the top line is changed
+;   with the Version number being replace by a cycle count
+;
+;      M80MEMTP C:0001 S:8000 E:FFFF 32KU pg:00L 8888
+;    where C:0001 represents the number of test cycles completed. 
+;
+;
 ; ***************   STOPPING THE PROGRAM 
 ;
 ; The program monitors the keyboard during the test and any key will interrupt it.
@@ -131,7 +143,8 @@
 ;   after 10 error lines or at end of each cycle
 ;   	You can press space to continue
 ;   	press C to continue without stopping for any errors
-;   	press Q or anything else to return to NAS-SYS
+;   	press Q to return to NAS-SYS
+;  any other key is ignored 
 ;
 ; *****************  Requirements:
 ;
@@ -158,7 +171,7 @@
 ;
 ; at the end shows "press SP, C or Q" at the end of each cycle
 ;    space or c starts the process all over again
-;    enter Q or any other character to return to NAS-SYS ( see "press SP, C or Q" above )
+;    enter Q to return to NAS-SYS ( see "press SP, C or Q" above )
 ;
 ; *******************  Results:
 ;  memory address with a letter A means
@@ -188,6 +201,11 @@
 ;            e.g. switching 8 32KU pages  ( 32k pages into upper 32k of memory )
 ;  2. moved stack to end of code
 ;  3. optimised some of the code to save space
+;  Version 4 - April 2026
+;  1. added cycle number to see what test cycle you are on
+;     this is displayed on the top line replacing the version number
+;  2. changed the keyboard interrupt to ignore null characters 
+;      a problem with Nascom4 and the inverted serial inputs
 ;
 ; Nas-Sys Equates
 
@@ -252,7 +270,8 @@ PAGETYPE: DEFB	00		; the value to be loaded into OFE to set the first page
 			
 
 TESTVALUE:	DEFB	055H	; what to load to the memory
-TESTCYCLE: 	DEFB	0	; Test cycle - either set memory to zero or do tests
+TESTPART: 	DEFB	0	; Test part - either set memory to zero or do tests
+TESTCYCLE:  DEFW    0   ; test cycle increments after each successful test
 SAVESTACK:	DEFW	0H	; save Stack pointer before doing NMI
 SAVENMI:	DEFW	0H	; save area for old NMI address
 ERRORS:		DEFB	0H	; how many errors have occurred
@@ -273,12 +292,7 @@ START:
 
 	LD   HL,0BCAH	; set screen to heading line
 	LD (CURSOR),HL	
-	RST PRS		; clear current line
-	DEFB ESC,0
-
-	RST PRS
-	DEFM "MAP80 MEMTST V3"
-	DEFB 0
+    CALL DISPTITLE
 
 	POP HL		; restore cursor position
 	LD (CURSOR),HL	
@@ -352,6 +366,8 @@ SETPAGETYPE:
 ; ------------------------- display details about the test.
 DISPLAYSTART:
 
+    LD HL,0             ; reset the test cycles
+    LD (TESTCYCLE),HL
 	LD  DE,(CURSOR)	; hold current cursor position
 	LD	HL,0BDAH	; set screen to heading line
 	LD (CURSOR),HL
@@ -360,6 +376,7 @@ DISPLAYSTART:
 	LD (CURSOR),DE ; put cursor back onto main screen
 
     ; move onto screen and repeat details
+    CALL DISPTITLE
 	CALL OUTRANGE
 
     CALL GETPAGETYPE
@@ -372,7 +389,7 @@ DISPLAYSTART:
 	JR Z,NOPAGING	; zero means no paging 
 
 	RST PRS
-	DEFM "switching "
+	DEFM "using "
 	DEFB 0
 
 	LD  A,B		; Number set earlier by GETPAGETYPE 
@@ -409,13 +426,14 @@ WAITSTART:
 
 LOOP:	; start by setting test type
 	
-	LD	A,1		; 2 cycles ( zerioise and then test )
-	;   firstly to zeroize all pages
-	;   second to do bit walk
+	LD	A,1		; 2 cycles ( zeroise and then test )
+	;   
+	;   1 = firstly to zeroize all pages
+	;   0 = second to do bit walk
 	;             and opcode test
-	LD	(TESTCYCLE),A
+	LD	(TESTPART),A
 
-NXTCYCLE:	; move to next cycle
+NXTPART:	; move to next part
 
 PAGESTART:	; start here for new pages
 
@@ -444,8 +462,8 @@ SETADDRESS:
 	LD DE,(STARTADDR)     ; start address
 
 	; decide which test is being done
-	LD	A,(TESTCYCLE)	; check what test we are doing
-	CP	2
+	LD	A,(TESTPART)	; check what test we are doing
+	OR A
 	JP	Z,BITWALK
 	; else number 1 is zero all memory
 
@@ -556,16 +574,30 @@ ENDPAGE:	; come here when we have finished test for one page
 
 
 ; check if we have done all tests
-	LD	A,(TESTCYCLE)	; load current test number
-	INC	A
+	LD	A,(TESTPART)	; load current test number
+	DEC A
 	LD	D,A			; store for start check
-	LD	(TESTCYCLE),A		; store away again
-	CP	3
-	JP	NZ,NXTCYCLE
-
+	LD	(TESTPART),A		; store away again
+	
+	JP	P,NXTPART  ; still positive after dec do do anther part
 
 	CALL WAIT	 ; wait after memtest
 
+    ; increment the test cycle
+	LD   DE,(CURSOR)	; save current cursor position
+	LD   HL,0BD3H	    ; set screen to heading line
+                        ; overwrites the Version with cycle
+	LD (CURSOR),HL
+	RST PRS
+	DEFM "C:"
+	DEFB 0
+    LD HL,(TESTCYCLE)
+    INC HL
+    LD (TESTCYCLE),HL
+	RST SCAL         ; print  number
+	DEFB TBCD3
+	LD (CURSOR),DE
+        
 
 	JP LOOP          ; go back to start
 
@@ -832,7 +864,9 @@ CHECKKEY:	; check for key press
             ; removed register saves as not needed
 	RST  SCAL
 	DEFB ZIN	; scan for input V2 - changed to use any input to wait
-	RET   NC
+	RET  NC
+    OR   A      ; look for null character 
+    RET  Z     ; if so ignore 
 	XOR  A
 	LD (WAITONERROR),A	; reset wait on error
 
@@ -848,11 +882,14 @@ WAIT:
 	DEFM "press SP, C or Q"
 	DEFB 0
 
+WAIT1:
 	RST RIN          ; wait for character returned in A
+    CP "Q"           ; V6 added check that Q pressed to quit
+    JR Z,NASSYS      ; return to Nassys
 	CP " "		     ; if space carry on 
-	JR Z,CONT1     ; else jump to warn start nassys 3
-	CP "C"		; C will continue without stopping
-	JR NZ,NASSYS	; exit if anything else 
+	JR Z,CONT1      ; else jump to warn start nassys 3
+	CP "C"		    ; C will continue without stopping
+	JR NZ,WAIT1 	; continue to wait if anything else 
 
 	LD (WAITONERROR),A	; set it so it does not wait
 
@@ -923,6 +960,14 @@ REP64K:
 	DEFB 0
 DISPEND:
 	RET
+
+DISPTITLE:
+	RST PRS		; clear current line
+	DEFB ESC,0
+	RST PRS
+	DEFM "M80MEMTP V4 "
+	DEFB 0
+    RET
 
 ; V3 moved stack to end of code
 ;  our own stack to use - also used for opcode call
