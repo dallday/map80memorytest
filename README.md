@@ -8,18 +8,41 @@ This is a memory test program for the Nascom MAP80 256k memory card.
 
 m80memtp - stands for M80MEMoryTestPaging
 
-The main change for Version 6 was to avoid an issue on the Nascom4 system and the serial port.  
+Since we are talking about a NASSYS program the memory from 0000H to 07FFH 
+     will always be used by the monitor, working ram and video ram.
+     So testing between 0000H and 07FFH will not be very useful 
+     ( unless page count set to 0 and you advoid the ram used by NASSYS and this program )
+
+The progam will always be in memory 0C80H no matter what paging it does.
+
+Usage:-   
+    E C80 8000 9000 2  
+    This will test from address 8000 to 8FFF using 4 32k pages 
+
+If start address is between 1000H and 7FFFH and the end address is 8000H or below then
+        it will test each 32k page using the lower 32k of memory.
+
+If start address is between 8000H and FFFFH and the end address is 0000H or  > 8000H and <= FFFFH then
+        it will test each 32k page using the upper 32k of memory.
+
+If start address is between 1000H and 7FFFH and the end address is above 8000H then
+        it will test each 64k page of memory.
+
+The standard 256k memory card has 8 pages of 32k  
+    so will check pages 0 to 7   
+The standard 256k memory card has 4 pages of 64k  
+    so will check pages 0 to 3
+
+Note it will end the test at the end address - 1   
+       so E C80 1000 2000  
+    will test the memory from 1000H to 1FFFH   
+
+The main change for Version 4 was to avoid an issue on the Nascom4 system and the serial port.  
 It also added a cycle number to the top screen so you know how many times the test has run.  
-Version 7 was a fix to version 6 to get the top line on the screen correct :(
 
 See m80memtp.asm for full details on using the program.
 
-Usage:- 
-  E C80 8000 9000 2
-This will test from address 8000 to 8FFF using 4 32k pages 
-
-See readme.txt for details on assembling the program using z80asm on a linux system.
-
+See readme.txt for details on assembling the program using z80asm on a linux system.  
 You will need to set the "execute" flag on the build and compile.sh files if you want to use them.
 
 File name | Description
