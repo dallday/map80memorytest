@@ -1,19 +1,31 @@
 ; M80MEMTP
-;   David Allday - 2 April 2026
-;        version 4
+;   David Allday - 2 may 2026
+;        version 5
 ;
 ; Memory test program for the Nascom MAP80 256k memory card
 ;  It is designed to test the paging options provided by the MAP80 256k card.
 ;    but can be used to test nonpaged memory by setting Numberof64kpages to 0.
+;
+; ********** some notes on the paging of memory
 ; 
-;   I got a bit confused as the Pages the manual seem to talk about is rows 0 to 3 whereas
-;   the circuit diagram talks about rows 1 to 4 
-;   I believe page 0 is row 1.
+;   I got a bit confused as the manual seem to talk about is rows 0 to 3 whereas
+;   the circuit diagram defines rows 1 to 4 
+;   Since the paging uses bits 1 to 5 of port 0xFE to select the row 
+;       this will have a value of 0 to 0x1F ( 0 to 31 )
+;       so we will work on rows 0 to 4 on each board :)
+;   I believe row 1 on the schematic is row 0 in the program.
+;   This is important if you are trying to identify which chip is failing.
+;
+;   And I had an issue talking about pages and rows of memory chips.
+;   Pages can be the whole 64k of a block 
+;       or the 32k of the lower or upper half of a 64k row.
 ;  
 ;  Since we are talking about a NASSYS program the memory from 0000H to 07FFH 
 ;     will always be used by the monitor, working ram and video ram.
 ;     So testing between 0000H and 07FFH will not be very useful 
 ;     ( unless page count set to 0 and you avoid the ram used by NASSYS and this program )
+;
+; ************ some infomation about how it works
 ;
 ;  The progam will always be in memory 0C80H no matter what paging it does.
 ;
@@ -22,18 +34,18 @@
 ;     will test the memory from 1000H to 1FFFH 
 ;
 ;  if start address is between 1000H and 7FFFH and the end address is 8000H or below then
-;        it will test each 32k page using the lower 32k of memory.
+;        it will test each 64k block using 32k pages mapped to the lower 32k of memory.
 ;
 ;  if start address is between 8000H and FFFFH and the end address is 0000H or  > 8000H and <= FFFFH then
-;        it will test each 32k page using the upper 32k of memory.
+;        it will test each 64k block using 32k pages mapped to the upper 32k of memory.
 ;
 ;  if start address is between 1000H and 7FFFH and the end address is above 8000H then
-;        it will test each 64k page of memory.
+;        it will test each 64k block of memory mapped to 64k pages.
 ;
 ;  The standard 256k memory card has 8 pages of 32k
-;    so will check pages 0 to 7 
+;    so will check 32k pages 0 to 7 
 ;  The standard 256k memory card has 4 pages of 64k
-;    so will check pages 0 to 3
+;    so will check 64k pages 0 to 3
 ; 
 ;  The program calculates the number of test blocks it needs to do depending upon the type of test being done.
 ;     So for 64k tests the number of blocks will be the number of 64k pages.
@@ -46,7 +58,8 @@
 ;  If you want to use or amend this program please feel free.
 ;   It would be nice if you mentioned me and let me know how it goes
 ;            david_nascom@davjanbec.co.uk
-;   
+;
+; ******   BECAREFUL *********1   
 ; NOTE1:- The opcode test uses NMI so be careful trying to single step this code.
 ; NOTE2:- The program is written for the NASSYS3 so you cannot test memory locations 000H to 07FFH
 ;
@@ -62,6 +75,8 @@
 ;			0 - special case and NO paging is activated.
 ;			4 - standard M80 256k card fully populated
 ;			10 - (16 dec) if you have 4 cards or moded the card to provide 1Mbyte.
+;   The 64k page to start test at - default is 0.
+;
 ;  e.g.
 ;      EC80 8000 9000 2
 ;        will test memory from 8000 to 8FFF for 4 32k pages 
@@ -75,8 +90,17 @@
 ;        will test memory from 1000 to FFFF without paging. 
 ;                Port EF is not change for this test.
 ;
-;         Only the low byte is used from lastpage parameter.
-;         The end address tested is actually -1 of the endaddress value.
+;      EC80 1000 0000 3 2
+;        will test memory from 1000 to FFFF for 3 64k pages 
+;           starting at row 2 
+;         so it will test rows 2, 3 and 4  
+;
+;
+; ***** note parameter  Numberof64kpages
+;         Only the low byte is used from Numberof64kpages parameter.
+;
+; ***** parameter  endaddress
+;         The last address tested is actually -1 of the endaddress value.
 ;
 ; *************** OUTPUT MESSAGES 
 ;
@@ -188,6 +212,20 @@
 ;     The attempt to run opcode test was not successful
 ;          NOTE:- it is only run if the other tests have worked.
 ;
+; *******************  MAP80 port 0FEH
+;   bit 0 - 1 means select uppper 32k, 0  select lower 32k
+;                   not relevant if bit 7 is 0
+;   bit 1 to 5 - set the 64k page to use
+;                    notes say bit 5 not used in 32k mode
+;   bit 6 - 1 means upper 32k of page 0 is permanent 
+;                  paging in using lower 32k 
+;           0 means lower 32k of page 0 is permanent 
+;                  paging in using upper 32k 
+;   bit 7 - 1 means using 32k page mode
+;           0 means using 64k page mode  
+;
+;
+;        
 ;  Changes 
 ;  Version 2 - January 2021
 ;  1.changed where the address value was written to on the header line.
@@ -206,6 +244,13 @@
 ;     this is displayed on the top line replacing the version number
 ;  2. changed the keyboard interrupt to ignore null characters 
 ;      a problem with Nascom4 and the inverted serial inputs
+;   Version 5 - May 2026
+;  1. added 4th paramter to say which block the test should start on
+;     This was due to an issue in the N4 where if nassys-3 was loaded 
+;     It used block 0 of the mapped memory
+;     And although protected from writes at the address 0x000 to 0x1FF
+;     It was not protected if the lower 32k of block 0 was paged to the upper 32k of memory.
+;
 ;
 ; Nas-Sys Equates
 
@@ -214,8 +259,8 @@ ARGN:	EQU	0C0BH	; number of arguments supplied
 ARG1:	EQU	0C0CH	; Holds program address
 ARG2:	EQU	0C0EH	; holds first parameter = start address
 ARG3:	EQU	0C10H   ; holds second parameter = end address
-ARG4:	EQU	0C12H	; holds third paramter = No of 32k pages
-ARG5:   EQU 0C14H   ; holds forth paramter = 
+ARG4:	EQU	0C12H	; holds third paramter = No of 64k pages to test 
+ARG5:   EQU 0C14H   ; holds forth paramter = start 64k page (memory row ) 
 CURSOR:	EQU	0C29H   ; hold position of the cursor on the screen
 NMI:	EQU	0C7DH	; address to hold NMI routine - starts with a JP 
 
@@ -281,8 +326,11 @@ SAVERESULT:	DEFB	0H	; save the returned byte
 
 	; normally 8000 to 0000 to cover the top 32k
 STARTADDR:	DEFW	08000H	; start address for test of a page
-ENDADDR:	DEFW	00000H	; end address for test of a page
-
+ENDADDR:	DEFW	09000H	; end address for test of a page
+STARTPAGE:  DEFB    0H      ; the 64k page to start testing on 
+                            ; need to shift 1 bit left to get page number
+                            ; as bit 0 used in 32k pages
+                            ; bits 1 to 5 are the 64k page numbers
 
 START:	
 	LD SP,TSTSTACK		; use our own stack
@@ -309,13 +357,20 @@ START:
 	JR  Z,TWO
 	CP  3
 	JR  Z,THREE
-	; assume we have 4 or more parameters - will ignore the rest
-	; drop down to 4 parameters
+	CP  4
+	JR  Z,FOUR
+	; assume we have 5 or more parameters - will ignore the rest
+	; drop down to 5 parameters
 	; Load parameters into local memory 
 	; so if called again same values will be used
-	
-FOUR:	LD A,(ARG4)		; just the low bytes from this parameter
-	; allow 0 as a special case - means no paging 
+FIVE:
+        LD A,(ARG5)     ; load the page to start on should be 0 to 1F
+        SLA  A          ; page count is bits 1 to 5 bit 0 only used for 32k pages
+        AND 3EH         ; the max it can be shifted over by 1
+        LD (STARTPAGE),A	
+FOUR:
+    	LD A,(ARG4)		; just the low bytes from this parameter
+    	; allow 0 as a special case - means no paging 
 FOUROK:
 	LD (NO64KPAGES),A	; store number of 64k pages to process
 
@@ -346,20 +401,27 @@ TESTTYPE:		; check if doing lower upper 32k or 64k
 	JR C,FULL64K	; if carry set then end address is in top 32k so doing 64k paging
 
 LOW32K:
-	LD A,0C0H	; value to output to use the lower 32k for paging 
+    LD A,(STARTPAGE) ; V5  should load start page number into 
+	OR 0C0H	; value to output to use the lower 32k for paging (version 5)
 	LD B,A
 	JR SETPAGETYPE
-TOP32K: LD A,080H	; value to output to use the upper 32k for paging
+TOP32K: 
+;   start in top 32k so assume end is also 
+;     well only need to page in the top 32k in each row 
+    LD A,(STARTPAGE) ; V5  should load start page number into 
+    OR 080H	; value to output to use the upper 32k for paging
 	LD B,A
 	JR SETPAGETYPE
 
 FULL64K: 
-	LD A,00H	; value to output to test the first 64k page
+    LD A,(STARTPAGE) ; V5  should load start page number into 
+;	LD A,00H	; value to output to test the first 64k page
 	LD B,A
 	INC BC		; increment value so page increment is now 2
 
 SETPAGETYPE:
 	LD (PAGEINCR),BC	; save increment value and what type of test is being done 
+                        ; note:- 16bit save into 2 8bit stores 
 
 
 	
@@ -401,8 +463,27 @@ DISPLAYSTART:
 	CALL DISPSIZE   ; output type of test being done
 
 	RST PRS
-	DEFM " pages"
+	DEFM " pg"
 	DEFB 0
+
+;---------------------V5 output the start page
+OUTSTARTPAGE:
+; display start page
+
+
+    LD A,(STARTPAGE) ; V5  should load start page number into 
+    OR A
+    JR Z, WAITSTART   ; from page 0 so no comment
+	RST SCAL 
+	DEFB CRLF	 ; do a new line
+	RST PRS
+	DEFM " Start pg:"
+	DEFB 0
+    LD A,(STARTPAGE) ; V5  should load start page number into 
+    SRA   A         ; only bits 1 to 5 are the 64k pages
+    RST  SCAL 
+    DEFB  B2HEX
+
 	JR  WAITSTART
 
 NOPAGING:
@@ -599,7 +680,8 @@ ENDPAGE:	; come here when we have finished test for one page
 	LD (CURSOR),DE
         
 
-	JP LOOP          ; go back to start
+;	JP LOOP          ; go back to start
+    JP DISPLAYSTART  ; go back and display details
 
 ;---------------------------------------
 ; -------------------- end of main loop
@@ -615,7 +697,8 @@ GETPAGETYPE:
     
     LD  A,(PAGETYPE)	; load the value to set the first page
 	LD  C,A       	; value that starts with page 0
-	OR  A		; if zero then doing 64k pages
+;	OR  A		; if zero then doing 64k pages
+    AND 0C0H    ; if top 2 bits 0 then doing 64k pages
 	LD  A, (NO64KPAGES)	; get number of pages to check
 	; next test checking previous or
 	JR  Z,GETPAGETYPE64K		; flag set by previous OR A 
@@ -784,17 +867,17 @@ OUTPAGE1:	; call here to output page where the cursor is
 			; which is the Port value to set page
 	DEC A		; actually the next page so reduce by 1
 			; ( Port value incremented after setting port )
-    	AND 3FH		; remove the 2 control bits
-	SRL A		; shift to right by 1 and sets carry flag
+   	AND 3FH		; remove the 2 control bits
+	SRL A		; shift to right by 1 and sets carry flag if bit 0 is set
 	PUSH	AF	; save the carry flag
 	RST SCAL    ; print  port value
 	DEFB B2HEX
 	;RST SCAL         ; output space
 	;DEFB SPACE
 	LD  A,(PAGETYPE) 	; check type of test
-	OR A		; or wih self will set z flag if zeros
+    AND 0C0H    ; if top 2 bits 0 then doing 64k pages
 	JR Z,PAGE64	; 64k tests
-	POP AF		; Get Carry flag
+	POP AF		; reset Carry flag from SRL operation
 	LD A,"U"
 	JR C,UPPER	; if carry set then upper 32k page
 	LD A,"L"
@@ -926,6 +1009,7 @@ OUTRANGE:
 	RST SCAL         ; print address
 	DEFB TBCD3
     RET 
+
     
 ;-------------------- V3 - output the type of test 
 DISPSIZE:
@@ -940,17 +1024,21 @@ DISPSIZE:
 	OR  A
 	JR  Z,DISPEND		; if zero then no paging
 	LD A,C          ; load page type
-	OR A		; check for Zero by using OR
+;	OR A		; check for Zero by using OR
+    AND 0C0H    ; if top 2 bits 0 then doing 64k pages
 	JR Z,REP64K ; if (PAGETYPE) is zero then doing 64k pages
 			; doing 32k pages
 	RST PRS
 	DEFM "32K"
 	DEFB 0
 	LD A,C          ; load page type again
-	CP 80H
-	LD A,"U"
-	JR Z,DISPUL
+    AND 40H         ; see if the bit 6 set then upper 32k locked ?? TODO
+;	LD A,"U"
+;	JR NZ,DISPUL    ; if NZ then the bit was set meaning testing in the upper 32k page
+;	LD A,"L"
 	LD A,"L"
+	JR NZ,DISPUL    ; if NZ then the bit was set meaning testing in the upper 32k page
+	LD A,"U"
 DISPUL:
 	RST ROUT	; output the single character
 	RET         ; return as now finished
@@ -965,7 +1053,7 @@ DISPTITLE:
 	RST PRS		; clear current line
 	DEFB ESC,0
 	RST PRS
-	DEFM "M80MEMTP V4 "
+	DEFM "M80MEMTP V5 "
 	DEFB 0
     RET
 

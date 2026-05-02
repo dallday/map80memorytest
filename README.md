@@ -1,4 +1,4 @@
-# map80memorytest (m80memtp) 
+# map80memorytest (m80memtp) verion 5
 
 This program is designed to run on a NASCOM2 Z80 computer.
 
@@ -16,8 +16,9 @@ Since we are talking about a NASSYS program the memory from 0000H to 07FFH
 The progam will always be in memory 0C80H no matter what paging it does.
 
 Usage:-   
-    E C80 8000 9000 2  
+    E C80 8000 9000 2 0
     This will test from address 8000 to 8FFF using 4 32k pages 
+       starting at row 0
 
 If start address is between 1000H and 7FFFH and the end address is 8000H or below then
         it will test each 32k page using the lower 32k of memory.
@@ -39,6 +40,7 @@ Note it will end the test at the end address - 1
 
 The main change for Version 4 was to avoid an issue on the Nascom4 system and the serial port.  
 It also added a cycle number to the top screen so you know how many times the test has run.  
+Version 5 was provide a start 64k page (row) as N4 used row 0 to store memory loaded nassys3.
 
 See m80memtp.asm for full details on using the program.
 
